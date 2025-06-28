@@ -7,13 +7,25 @@ This module provides the main entry point for the command-line interface.
 import os
 from pathlib import Path
 from typing import Optional, List
+import logging
+
+IS_NOT_YET_IMPLEMENTED = "This functionality is not yet implemented."
+
+APP_NAME = "Prompt Mixer"
+
+logging.basicConfig(level=logging.WARN)
 
 import typer
+from mojentic.llm import LLMBroker
+from mojentic.llm.gateways import OpenAIGateway
 from rich.console import Console
 from rich.panel import Panel
 
-from src.prompt_mixer.commands.init import do_init
-from src.prompt_mixer.gateways.git import GitGateway
+from prompt_mixer.commands.init import do_init
+from prompt_mixer.commands.ingest import do_ingest
+from prompt_mixer.commands.open import do_open
+from prompt_mixer.config import Config
+from prompt_mixer.gateways.git import GitGateway
 
 # Create Typer app
 app = typer.Typer(
@@ -22,13 +34,16 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Create console for rich output
 console = Console()
 
+git_gateway = GitGateway()
+
+llm_gateway = OpenAIGateway(api_key=os.environ.get("OPENAI_API_KEY"))
+llm_broker = LLMBroker(model="gpt-4.1", gateway=llm_gateway)
 
 @app.command()
 def init(
-        path: Optional[Path] = typer.Option(
+        library_path: Optional[Path] = typer.Option(
             None,
             help="Path to initialize the prompt library (default: $HOME/.prompt-mixer)"
         ),
@@ -51,14 +66,8 @@ def init(
     Creates a new prompt library at the specified path (or default location),
     initializes it as a Git repository, and sets up the default taxonomy structure.
     """
-    # Default path if not provided
-    if path is None:
-        path = Path.home() / ".prompt-mixer"
-
-    # Initialize GitGateway
-    git_gateway = GitGateway()
-
-    do_init(console, path, remote, provider, model, git_gateway)
+    # Create a new config with the specified path if provided
+    do_init(console, Config(library_path), remote, provider, model, git_gateway)
 
 
 @app.command()
@@ -84,8 +93,8 @@ def assemble(
     required by the specified target AI assistant.
     """
     console.print(
-        Panel(f"Assembling prompts for target: [bold]{target}[/bold]", title="Prompt Mixer"))
-    console.print("This functionality is not yet implemented.")
+        Panel(f"Assembling prompts for target: [bold]{target}[/bold]", title=APP_NAME))
+    console.print(IS_NOT_YET_IMPLEMENTED)
 
 
 @app.command()
@@ -105,13 +114,17 @@ def slice(
     """
     filters_str = ", ".join(filters) if filters else "none"
     console.print(
-        Panel(f"Slicing fragments with filters: [bold]{filters_str}[/bold]", title="Prompt Mixer"))
-    console.print("This functionality is not yet implemented.")
+        Panel(f"Slicing fragments with filters: [bold]{filters_str}[/bold]", title=APP_NAME))
+    console.print(IS_NOT_YET_IMPLEMENTED)
 
 
 @app.command()
 def ingest(
-        path: Path = typer.Argument(..., help="Path to the project to ingest"),
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to initialize the prompt library (default: $HOME/.prompt-mixer)"
+        ),
+        filename: Path = typer.Argument(..., help="Path to instructions to ingest"),
 ):
     """
     Ingest existing prompt artifacts into the library.
@@ -119,8 +132,8 @@ def ingest(
     Analyzes the specified project, imports prompt files, lint configs,
     and style guides into the prompt library.
     """
-    console.print(Panel(f"Ingesting prompts from: [bold]{path}[/bold]", title="Prompt Mixer"))
-    console.print("This functionality is not yet implemented.")
+    # Create a new config with the specified output path if provided
+    do_ingest(console, Config(), llm_broker, filename)
 
 
 @app.command()
@@ -141,10 +154,13 @@ def sync(
             "/yellow]")
 
     strategy = "rebase" if rebase else "merge"
-    action = "Pulling and pushing" if not (pull or push) else ("Pulling" if pull else "Pushing")
+    if not (pull or push):
+        action = "Pulling and pushing"
+    else:
+        action = ("Pulling" if pull else "Pushing")
 
-    console.print(Panel(f"{action} changes using {strategy} strategy", title="Prompt Mixer"))
-    console.print("This functionality is not yet implemented.")
+    console.print(Panel(f"{action} changes using {strategy} strategy", title=APP_NAME))
+    console.print(IS_NOT_YET_IMPLEMENTED)
 
 
 @app.command()
@@ -155,12 +171,7 @@ def open():
     Uses the editor specified by the $EDITOR environment variable,
     falling back to VS Code if not set.
     """
-    editor = os.environ.get("EDITOR", "code")
-    path = Path.home() / ".prompt-mixer"  # Default path
-
-    console.print(
-        Panel(f"Opening prompt library with: [bold]{editor}[/bold]", title="Prompt Mixer"))
-    console.print("This functionality is not yet implemented.")
+    do_open(console, Config())
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
 
 - Python 3.11+
 - Key Dependencies:
-  - pydantic: Data validation
+  - pydantic 2: Data validation
   - structlog: Logging
   - ollama/openai: LLM integration
   - pytest: Testing
