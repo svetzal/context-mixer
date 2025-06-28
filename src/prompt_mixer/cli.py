@@ -40,7 +40,8 @@ git_gateway = GitGateway()
 
 # Initialize the OpenAI gateway and LLM gateway
 openai_gateway = OpenAIGateway(api_key=os.environ.get("OPENAI_API_KEY"))
-llm_gateway = LLMGateway(model="gpt-4.1", gateway=openai_gateway)
+# llm_gateway = LLMGateway(model="gpt-4.1", gateway=openai_gateway)
+llm_gateway = LLMGateway(model="o4-mini", gateway=openai_gateway)
 
 @app.command()
 def init(

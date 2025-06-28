@@ -29,7 +29,7 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
 - src/             # Python source code and tests
   - commands/      # Command delegates for the Typer CLI interface
     - operations/  # Elemental domain specific operations (merge, sense conflicts)
-  - gateways/      # Gateways to separate logic from I/O (don't test across I/O)
+  - gateways/      # Gateways to separate logic from I/O (don't test gateways, eg across I/O)
   - domain/        # Logic and data structurs within the realm of prompt mgmt
   - cli.py         # Main program entry-point and command dispatcher
   - config.py      # Configuration storage and data-object
