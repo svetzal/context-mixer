@@ -8,7 +8,8 @@ from pathlib import Path
 from rich.panel import Panel
 
 from prompt_mixer.commands.ingest import do_ingest
-from prompt_mixer.commands.operations.merge import detect_conflicts, resolve_conflict
+from prompt_mixer.commands.operations.merge import detect_conflicts
+from prompt_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
 from prompt_mixer.config import DEFAULT_ROOT_CONTEXT_FILENAME
 from prompt_mixer.domain.conflict import Conflict, ConflictingGuidance
 from prompt_mixer.gateways.llm import LLMGateway

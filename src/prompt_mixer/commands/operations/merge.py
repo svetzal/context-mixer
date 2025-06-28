@@ -1,9 +1,9 @@
 from textwrap import dedent
-from typing import List
 
 from mojentic.llm import LLMMessage
 
-from prompt_mixer.domain.conflict import Conflict, ConflictList
+from prompt_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
+from prompt_mixer.domain.conflict import ConflictList
 from prompt_mixer.gateways.llm import LLMGateway
 
 
@@ -56,51 +56,6 @@ def detect_conflicts(existing_content: str,
     return conflicts
 
 
-def resolve_conflict(conflicts: List[Conflict], console) -> List[Conflict]:
-    """
-    Resolve conflicts by consulting the user.
-
-    This function presents each conflict to the user and asks them to choose
-    which guidance is correct.
-
-    Args:
-        conflicts: A list of Conflict objects to resolve
-        console: Rich console for output
-
-    Returns:
-        The list of conflicts with resolutions set
-    """
-    # If conflicts is empty, return it as is
-    if not conflicts:
-        return []
-
-    # Iterate through each conflict and resolve it
-    for conflict in conflicts:
-        console.print("\n[bold red]Conflict Detected![/bold red]")
-        console.print(f"[bold]Description:[/bold] {conflict.description}")
-        console.print("\n[bold]Conflicting Guidance:[/bold]")
-
-        for i, guidance in enumerate(conflict.conflicting_guidance):
-            console.print(f"\n[bold]{i + 1}. From {guidance.source}:[/bold]")
-            console.print(f"{guidance.content}")
-
-        # Ask the user to choose which guidance is correct
-        while True:
-            choice = console.input("\n[bold]Which guidance is correct? (Enter the number):[/bold] ")
-            try:
-                choice_idx = int(choice) - 1
-                if 0 <= choice_idx < len(conflict.conflicting_guidance):
-                    # Set the resolution to the chosen guidance
-                    conflict.resolution = conflict.conflicting_guidance[choice_idx].content
-                    break
-                else:
-                    console.print("[red]Invalid choice. Please enter a valid number.[/red]")
-            except ValueError:
-                console.print("[red]Invalid input. Please enter a number.[/red]")
-
-    return conflicts
-
-
 def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGateway,
                   console=None) -> str:
     """
@@ -128,7 +83,7 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
         if not console:
             raise ValueError("Console is required to resolve conflicts")
 
-        resolved_conflicts = resolve_conflict(conflicts.list, console)
+        resolved_conflicts = resolve_conflicts(conflicts.list, console)
 
     # Create a prompt for the LLM to merge the content
     base_prompt = dedent(f"""
