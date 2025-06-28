@@ -6,6 +6,7 @@ This module provides centralized configuration settings for the application.
 
 from pathlib import Path
 
+DEFAULT_ROOT_CONTEXT_FILENAME = "context.md"
 
 class Config:
     """Configuration settings for Prompt Mixer."""
