@@ -174,11 +174,8 @@ class DescribeSomeClass:
 
 ## Mojentic Development
 
-### LLM Tool Development
-
-1. When writing a new LLM tool, model the implementation after `mojentic.llm.tools.date_resolver.ResolveDateTool`
-2. For LLM-based tools, take the LLMBroker object as a parameter in the tool's initializer
-3. Don't ask the LLM to generate JSON directly, use the `LLMBroker.generate_object()` method instead
+- The LLMBroker is the central class to interact with the LLM
+  ```
 
 ## Documentation
 

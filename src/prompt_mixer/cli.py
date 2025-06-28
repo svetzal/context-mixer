@@ -16,7 +16,6 @@ APP_NAME = "Prompt Mixer"
 logging.basicConfig(level=logging.WARN)
 
 import typer
-from mojentic.llm import LLMBroker
 from mojentic.llm.gateways import OpenAIGateway
 from rich.console import Console
 from rich.panel import Panel
@@ -26,6 +25,7 @@ from prompt_mixer.commands.ingest import do_ingest
 from prompt_mixer.commands.open import do_open
 from prompt_mixer.config import Config
 from prompt_mixer.gateways.git import GitGateway
+from prompt_mixer.gateways.llm import LLMGateway
 
 # Create Typer app
 app = typer.Typer(
@@ -38,8 +38,9 @@ console = Console()
 
 git_gateway = GitGateway()
 
-llm_gateway = OpenAIGateway(api_key=os.environ.get("OPENAI_API_KEY"))
-llm_broker = LLMBroker(model="gpt-4.1", gateway=llm_gateway)
+# Initialize the OpenAI gateway and LLM gateway
+openai_gateway = OpenAIGateway(api_key=os.environ.get("OPENAI_API_KEY"))
+llm_gateway = LLMGateway(model="gpt-4.1", gateway=openai_gateway)
 
 @app.command()
 def init(
@@ -133,7 +134,7 @@ def ingest(
     and style guides into the prompt library.
     """
     # Create a new config with the specified library path if provided
-    do_ingest(console, Config(library_path), llm_broker, filename)
+    do_ingest(console, Config(library_path), llm_gateway, filename)
 
 
 @app.command()
