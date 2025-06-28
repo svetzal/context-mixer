@@ -47,3 +47,20 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["prompt_mixer*"]
+
+[tool.pytest.ini_options]
+# File patterns for test discovery
+python_files = ["*_spec.py"]
+
+# Display settings for better specification-style output
+addopts = "--tb=short --showlocals --color=yes --cov=src"
+
+# Custom test summary
+testpaths = ["src"]
+
+# Improve readability of test names
+python_functions = ["should_*"]
+python_classes = ["Describe*"]
+
+# Configure test collection
+norecursedirs = [".* build dist venv site"]
