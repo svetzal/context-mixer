@@ -7,4 +7,4 @@ pmx ingest .junie/guidelines.md
 ```
 
 Then the prompt-mixer library should contain a copy of the source document in
-the file "instructions.md".
+the file "context.md".

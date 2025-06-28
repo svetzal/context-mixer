@@ -24,8 +24,18 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
   - MkDocs: Documentation
 
 ## Project Structure
+
 ```
-TBD
+- src/             # Python source code and tests
+  - commands/      # Command delegates for the Typer CLI interface
+  - gateways/      # Gateways to separate logic from I/O (don't test across I/O)
+  - domain/        # Logic and data structurs within the realm of prompt mgmt
+  - cli.py         # Main program entry-point and command dispatcher
+  - config.py      # Configuration storage and data-object
+- use-cases/       # Numbered end-user scenarios, simple to complex
+- README.md        # Documentation for teammates and developers
+- SPEC.md          # Original design thoughts from the creator
+- pyproject.toml   # Python project metadata and dependencies
 ```
 
 ## Development Setup
