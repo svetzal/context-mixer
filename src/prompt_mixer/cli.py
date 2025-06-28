@@ -12,7 +12,8 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from prompt_mixer.commands.init import do_init
+from src.prompt_mixer.commands.init import do_init
+from src.prompt_mixer.gateways.git import GitGateway
 
 # Create Typer app
 app = typer.Typer(
@@ -46,7 +47,7 @@ def init(
 ):
     """
     Initialize a new prompt library.
-    
+
     Creates a new prompt library at the specified path (or default location),
     initializes it as a Git repository, and sets up the default taxonomy structure.
     """
@@ -54,7 +55,10 @@ def init(
     if path is None:
         path = Path.home() / ".prompt-mixer"
 
-    do_init(console, path, remote, provider, model)
+    # Initialize GitGateway
+    git_gateway = GitGateway()
+
+    do_init(console, path, remote, provider, model, git_gateway)
 
 
 @app.command()
@@ -75,7 +79,7 @@ def assemble(
 ):
     """
     Assemble prompt fragments for a specific target.
-    
+
     Collects relevant fragments, orders them, and renders them into the format
     required by the specified target AI assistant.
     """
@@ -96,7 +100,7 @@ def slice(
 ):
     """
     Output chosen fragments based on filters.
-    
+
     Filters fragments by tags and outputs them to stdout or a file.
     """
     filters_str = ", ".join(filters) if filters else "none"
@@ -111,7 +115,7 @@ def ingest(
 ):
     """
     Ingest existing prompt artifacts into the library.
-    
+
     Analyzes the specified project, imports prompt files, lint configs,
     and style guides into the prompt library.
     """
@@ -127,7 +131,7 @@ def sync(
 ):
     """
     Synchronize the prompt library with a remote Git repository.
-    
+
     By default, performs a pull followed by a push. Use flags to limit to
     pull or push only, or to specify the pull strategy.
     """
@@ -147,7 +151,7 @@ def sync(
 def open():
     """
     Open the prompt library in the default editor.
-    
+
     Uses the editor specified by the $EDITOR environment variable,
     falling back to VS Code if not set.
     """
