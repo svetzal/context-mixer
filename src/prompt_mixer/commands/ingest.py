@@ -27,11 +27,11 @@ def do_ingest(console, config: Config, llm_broker: LLMBroker, filename: Path=Non
 
         ingest_content = monolith_path.read_text()
 
-        # Simply save the monolithic prompt as instructions.md
-        output_file = config.library_path / "instructions.md"
+        # Simply save the monolithic prompt as context.md
+        output_file = config.library_path / "context.md"
         output_file.write_text(ingest_content)
 
-        console.print("[green]Successfully imported prompt as instructions.md[/green]")
+        console.print("[green]Successfully imported prompt as context.md[/green]")
 
     except Exception as e:
         console.print(f"[red]Error during ingestion: {str(e)}[/red]")

@@ -65,6 +65,13 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
    chmod +x .git/hooks/pre-commit
    ```
 
+## Coding Guidelines
+
+- Use the Gateway pattern to isolate I/O (network, disk, etc.) from logic
+  - Gateways should contain minimal to no logic, simply delegate to the OS or
+    libraries that perform I/O
+  - Gateways should not be tested, to avoid mocking what we don't own
+
 ## Testing Guidelines
 - Tests are co-located with implementation files (test file must be in the same folder as the implementation)
 - We write tests as specifications, therefore you can find all the tests in the *_spec.py files
@@ -77,14 +84,82 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
 
 ### Testing Best Practices
 - Use pytest for testing, with mocker if you require mocking
-- Do not use unittest or MagicMock directly, use it through the mocker wrapper
-- Use @fixture markers for pytest fixtures
-- Break up fixtures into smaller fixtures if they are too large
-- Do not write Given/When/Then or Act/Arrange/Assert comments
-- Do not write docstring comments on your should_ methods
-- Separate test phases with a single blank line
-- Do not write conditional statements in tests
-- Each test must fail for only one clear reason
+  - Always use the pytest `mocker` fixture for creating mocks: `def test_something(mocker):`
+  - Create mocks with `mocker.MagicMock()` instead of importing from unittest.mock
+  - When mocking a specific class, use `mocker.MagicMock(spec=ClassName)` to ensure type safety
+- Use `@pytest.fixture` markers for pytest fixtures
+  - Keep fixtures concise and focused on a single responsibility
+  - Break up fixtures into smaller fixtures if they are too large
+  - Pass the mocker fixture to other fixtures that need to create mocks: `def mock_something(mocker):`
+- Test structure and readability:
+  - Do not write docstring comments on your `should_` methods
+  - Do not write docstring comments on your `Describe*` classes
+  - Do not write comments in tests to delineate act, arrange, or assert phases
+  - Separate test phases with a single blank line (not multiple blank lines)
+  - Use descriptive variable and test method names instead of comments
+- Test assertions:
+  - Each test must fail for only one clear reason
+  - Do not write conditional statements in tests
+  - For complex assertions, break them into multiple clear assertions
+  - When checking for text in output, prefer direct string checks over complex conditions
+  - Use `typing.AnyStr` for string literals in tests when the actual content doesn't matter (e.g., in mock return values)
+
+### Testing Examples
+
+#### Good Example - Proper Fixture and Test Structure:
+```python
+import pytest
+from typing import AnyStr
+from prompt_mixer.some_module import SomeClass
+
+@pytest.fixture
+def mock_dependency(mocker):
+    return mocker.MagicMock(spec=SomeDependency)
+
+@pytest.fixture
+def subject(mock_dependency):
+    return SomeClass(mock_dependency)
+
+class DescribeSomeClass:
+    def should_do_something_when_condition(self, subject, mock_dependency):
+        # Using AnyStr for mock return value where content doesn't matter
+        mock_dependency.get_message.return_value = AnyStr
+
+        result = subject.do_something()
+
+        assert result == expected_value
+        assert mock_dependency.some_method.called_once()
+```
+
+#### Bad Example - Avoid These Patterns:
+```python
+import pytest
+from unittest.mock import MagicMock  # Don't import directly from unittest.mock
+
+@pytest.fixture
+def mock_dependency():
+    """Create a mock dependency."""  # Don't add docstrings to fixtures
+    return MagicMock()  # Use mocker.MagicMock() instead
+
+class DescribeSomeClass:
+    """Tests for SomeClass."""  # Don't add docstrings to Describe classes
+
+    def should_do_something_when_condition(self, subject, mock_dependency):
+        # Arrange
+        mock_dependency.setup()  # Don't add comments for test phases
+
+        # Act
+        result = subject.do_something()
+
+        # Assert
+        assert result == expected_value  # Keep assertions simple and direct
+
+        # Check if method was called  # Don't add explanatory comments
+        if mock_dependency.some_method.called:  # Don't use conditionals in assertions
+            assert True
+        else:
+            assert False
+```
 
 ## Code Style Requirements
 - Follow the existing project structure

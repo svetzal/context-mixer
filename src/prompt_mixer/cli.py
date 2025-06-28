@@ -132,8 +132,8 @@ def ingest(
     Analyzes the specified project, imports prompt files, lint configs,
     and style guides into the prompt library.
     """
-    # Create a new config with the specified output path if provided
-    do_ingest(console, Config(), llm_broker, filename)
+    # Create a new config with the specified library path if provided
+    do_ingest(console, Config(library_path), llm_broker, filename)
 
 
 @app.command()
