@@ -26,7 +26,7 @@ def detect_conflicts(existing_content: str,
     """
     # Create a prompt for the LLM to detect conflicts
     prompt = dedent(f"""
-        Your task is to carefully analyze these two documents and identify any clearly conflicting
+        Your task is to carefully analyze these two documents and identify all clearly conflicting
         guidance or information.
 
         Existing
@@ -43,7 +43,9 @@ def detect_conflicts(existing_content: str,
         or opposing guidance on the same topic. Focus on finding a single, obvious conflict 
         where one document is recommending something very different or opposite from the other.
 
-        Create a structured representation of any conflicts you find.
+        - something unspecified does not indicate a conflict
+
+        Create detailed separate structured representations of every individual conflict you find.
     """).strip()
 
     # Create an LLMMessage with the prompt
