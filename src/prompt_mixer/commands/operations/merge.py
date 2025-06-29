@@ -4,6 +4,7 @@ from mojentic.llm import LLMMessage
 
 from prompt_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
 from prompt_mixer.domain.conflict import ConflictList
+from prompt_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
 from prompt_mixer.gateways.llm import LLMGateway
 
 
@@ -25,7 +26,7 @@ def detect_conflicts(existing_content: str,
         A Conflict object if a conflict is detected, None otherwise
     """
     # Create a prompt for the LLM to detect conflicts
-    prompt = dedent(f"""
+    prompt = clean_prompt(f"""
         Your task is to carefully analyze these two documents and identify all clearly conflicting
         guidance or information.
 
@@ -46,13 +47,15 @@ def detect_conflicts(existing_content: str,
         - something unspecified does not indicate a conflict
 
         Create detailed separate structured representations of every individual conflict you find.
-    """).strip()
+    """)
 
-    # Create an LLMMessage with the prompt
-    message = LLMMessage(content=prompt)
+    messages = [
+        ingest_system_message,
+        LLMMessage(content=prompt)
+    ]
 
     # Use the LLM to detect conflicts
-    conflicts = llm_gateway.generate_object(messages=[message], object_model=ConflictList)
+    conflicts = llm_gateway.generate_object(messages=messages, object_model=ConflictList)
     return conflicts
 
 
@@ -86,7 +89,7 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
         resolved_conflicts = resolve_conflicts(conflicts.list, console)
 
     # Create a prompt for the LLM to merge the content
-    base_prompt = dedent(f"""
+    base_prompt = clean_prompt(f"""
         Your task is to merge two documents into a single coherent document, accurately representing
         the content of both documents, and without adding anything extra.
 
@@ -94,7 +97,7 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
         to be merged.
 
         Please combine these documents, ensuring that:
-        1. All unique information from both documents is preserved
+        1. All detail and unique information from both documents is preserved
         2. Duplicate information appears only once
         3. The resulting document is well-structured and coherent
         4. Related information is grouped together logically
@@ -108,7 +111,7 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
         ```
         {new_content}
         ```
-    """).strip()
+    """)
 
     # If there were resolved conflicts, include them in the prompt
     conflict_info = ""
@@ -120,21 +123,20 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
                 conflict_resolutions.append(f"Description: {conflict.description}\nResolution: {conflict.resolution}")
 
         if conflict_resolutions:
-            conflict_info = dedent(f"""
+            conflict_info = clean_prompt(f"""
                 Conflicts were detected between these documents and resolved as follows:
                 ```
                 {"\n\n".join(conflict_resolutions)}
                 ```
 
                 When merging the documents, use these resolutions to guide your work.
-            """).strip()
+            """)
 
-    conclusion = dedent("""
+    conclusion = clean_prompt("""
         Please provide only the merged document as your response, without any additional commentary
         or wrappers.
-    """).strip()
+    """)
 
-    # Combine all parts of the prompt
     prompt_parts = [base_prompt]
     if conflict_info:
         prompt_parts.append(conflict_info)
@@ -142,11 +144,11 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
 
     prompt = "\n\n".join(prompt_parts)
 
-    # Create an LLMMessage with the prompt
-    message = LLMMessage(content=prompt)
+    messages = [
+        ingest_system_message,
+        LLMMessage(content=prompt)
+    ]
 
-    # Generate the merged content using the LLM gateway
-    response = llm_gateway.generate(messages=[message])
+    response = llm_gateway.generate(messages=messages)
 
-    # Return the generated content
     return response
