@@ -170,7 +170,7 @@ class DescribeSomeClass:
 - Use type hints for all functions and methods
 - Co-locate tests with implementation
 - Favor declarative code styles over imperative code styles
-- Use pydantic (not @dataclass) for data objects with strong types
+- Use pydantic v2 (not @dataclass) for data objects with strong types
 - Favor list and dictionary comprehensions over for loops
 
 ## Documentation

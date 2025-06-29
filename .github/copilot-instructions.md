@@ -29,7 +29,7 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
 - src/             # Python source code and tests
   - commands/      # Command delegates for the Typer CLI interface
     - operations/  # Elemental domain specific operations (merge, sense conflicts)
-  - gateways/      # Gateways to separate logic from I/O (don't test gateways, eg across I/O)
+  - gateways/      # Gateways to separate logic from I/O (don't test across I/O)
   - domain/        # Logic and data structurs within the realm of prompt mgmt
   - cli.py         # Main program entry-point and command dispatcher
   - config.py      # Configuration storage and data-object
@@ -170,7 +170,7 @@ class DescribeSomeClass:
 - Use type hints for all functions and methods
 - Co-locate tests with implementation
 - Favor declarative code styles over imperative code styles
-- Use pydantic (not @dataclass) for data objects with strong types
+- Use pydantic v2 (not @dataclass) for data objects with strong types
 - Favor list and dictionary comprehensions over for loops
 
 ## Documentation
