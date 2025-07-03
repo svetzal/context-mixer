@@ -23,6 +23,7 @@ from rich.panel import Panel
 from prompt_mixer.commands.init import do_init
 from prompt_mixer.commands.ingest import do_ingest
 from prompt_mixer.commands.open import do_open
+from prompt_mixer.commands.slice import do_slice
 from prompt_mixer.config import Config
 from prompt_mixer.gateways.git import GitGateway
 from prompt_mixer.gateways.llm import LLMGateway
@@ -101,23 +102,28 @@ def assemble(
 
 @app.command()
 def slice(
-        filters: List[str] = typer.Argument(None,
-                                            help="Filters to apply (e.g., 'lang:python', "
-                                                 "'layer:testing')"),
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the prompt library (default: $HOME/.prompt-mixer)"
+        ),
         output: Optional[Path] = typer.Option(
             None,
             help="Output path for the sliced fragments"
         ),
 ):
     """
-    Output chosen fragments based on filters.
+    Analyze context.md and split it into pieces based on content categories.
 
-    Filters fragments by tags and outputs them to stdout or a file.
+    Extracts content about:
+    - why (purpose of the project)
+    - who (people and organizations involved)
+    - what (components, technologies, and engineering approaches)
+    - how (processes and workflows)
+
+    Only creates output files for categories with applicable content.
     """
-    filters_str = ", ".join(filters) if filters else "none"
-    console.print(
-        Panel(f"Slicing fragments with filters: [bold]{filters_str}[/bold]", title=APP_NAME))
-    console.print(IS_NOT_YET_IMPLEMENTED)
+    # Create a new config with the specified library path if provided
+    do_slice(console, Config(library_path), llm_gateway, output)
 
 
 @app.command()
