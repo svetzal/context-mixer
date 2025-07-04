@@ -8,10 +8,10 @@ repositories with automatically generated commit messages.
 from pathlib import Path
 from typing import Tuple
 
-from prompt_mixer.gateways.git import GitGateway
-from prompt_mixer.gateways.llm import LLMGateway
-from prompt_mixer.domain.commit_message import CommitMessage
-from prompt_mixer.commands.operations.commit_message import generate_commit_message
+from context_mixer.gateways.git import GitGateway
+from context_mixer.gateways.llm import LLMGateway
+from context_mixer.domain.commit_message import CommitMessage
+from context_mixer.commands.operations.commit_message import generate_commit_message
 
 
 class CommitOperation:

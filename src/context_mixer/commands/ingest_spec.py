@@ -7,16 +7,16 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from prompt_mixer.commands.ingest import do_ingest
-from prompt_mixer.commands.operations.merge import detect_conflicts
-from prompt_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
-from prompt_mixer.commands.operations.commit import CommitOperation
-from prompt_mixer.config import DEFAULT_ROOT_CONTEXT_FILENAME
-from prompt_mixer.domain.conflict import Conflict, ConflictingGuidance
-from prompt_mixer.domain.commit_message import CommitMessage
-from prompt_mixer.gateways.git import GitGateway
-from prompt_mixer.gateways.llm import LLMGateway
-from prompt_mixer.spec_helpers import MessageMatcher
+from context_mixer.commands.ingest import do_ingest
+from context_mixer.commands.operations.merge import detect_conflicts
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
+from context_mixer.commands.operations.commit import CommitOperation
+from context_mixer.config import DEFAULT_ROOT_CONTEXT_FILENAME
+from context_mixer.domain.conflict import Conflict, ConflictingGuidance
+from context_mixer.domain.commit_message import CommitMessage
+from context_mixer.gateways.git import GitGateway
+from context_mixer.gateways.llm import LLMGateway
+from context_mixer.spec_helpers import MessageMatcher
 
 MERGED_CONTENT_FROM_LLM = "Merged content from LLM"
 
@@ -87,7 +87,7 @@ class DescribeDoIngest:
 
     def should_merge_with_existing_context_file(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
         # Mock detect_conflicts to return an empty ConflictList (no conflicts)
-        from prompt_mixer.domain.conflict import ConflictList
+        from context_mixer.domain.conflict import ConflictList
         mocker.patch('prompt_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[]))
 
         # Create an existing context.md file
@@ -125,7 +125,7 @@ class DescribeDoIngest:
         )
 
         # Mock detect_conflicts to return a ConflictList containing the mock Conflict
-        from prompt_mixer.domain.conflict import ConflictList
+        from context_mixer.domain.conflict import ConflictList
         mock_detect_conflicts = mocker.patch('prompt_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[conflict]))
 
         # Mock resolve_conflict to return the list of conflicts with resolutions set

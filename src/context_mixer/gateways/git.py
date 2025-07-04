@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from prompt_mixer.domain.commit_message import CommitMessage
+from context_mixer.domain.commit_message import CommitMessage
 
 
 class GitGateway:
@@ -92,7 +92,7 @@ class GitGateway:
             Tuple of (success, message)
         """
         stdout, stderr, return_code = self.run_git_command(
-            ["remote", "add", name, url], 
+            ["remote", "add", name, url],
             cwd=path
         )
 
@@ -155,7 +155,7 @@ class GitGateway:
         full_message = commit_message.format_message()
 
         stdout, stderr, return_code = self.run_git_command(
-            ["commit", "-m", full_message], 
+            ["commit", "-m", full_message],
             cwd=path
         )
 

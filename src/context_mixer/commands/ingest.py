@@ -2,12 +2,12 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from prompt_mixer.commands.operations.merge import merge_content
-from prompt_mixer.commands.operations.commit import CommitOperation
-from prompt_mixer.config import Config, DEFAULT_ROOT_CONTEXT_FILENAME
+from context_mixer.commands.operations.merge import merge_content
+from context_mixer.commands.operations.commit import CommitOperation
+from context_mixer.config import Config, DEFAULT_ROOT_CONTEXT_FILENAME
 
-from prompt_mixer.gateways.llm import LLMGateway
-from prompt_mixer.gateways.git import GitGateway
+from context_mixer.gateways.llm import LLMGateway
+from context_mixer.gateways.git import GitGateway
 
 
 def do_ingest(console, config: Config, llm_gateway: LLMGateway, filename: Path=None, commit: bool=True):

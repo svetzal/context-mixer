@@ -2,10 +2,10 @@ from textwrap import dedent
 
 from mojentic.llm import LLMMessage
 
-from prompt_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
-from prompt_mixer.domain.conflict import ConflictList
-from prompt_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
-from prompt_mixer.gateways.llm import LLMGateway
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
+from context_mixer.domain.conflict import ConflictList
+from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
+from context_mixer.gateways.llm import LLMGateway
 
 
 def detect_conflicts(existing_content: str,
@@ -40,8 +40,8 @@ def detect_conflicts(existing_content: str,
         {new_content}
         ```
 
-        Look for any contradictions or conflicts where the documents provide different 
-        or opposing guidance on the same topic. Focus on finding a single, obvious conflict 
+        Look for any contradictions or conflicts where the documents provide different
+        or opposing guidance on the same topic. Focus on finding a single, obvious conflict
         where one document is recommending something very different or opposite from the other.
 
         - something unspecified does not indicate a conflict

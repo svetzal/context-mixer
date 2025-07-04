@@ -7,9 +7,9 @@ appropriate commit messages using LLM capabilities.
 
 from mojentic.llm import LLMMessage, MessageRole
 
-from prompt_mixer.domain.commit_message import CommitMessage
-from prompt_mixer.domain.llm_instructions import git_commit_system_message
-from prompt_mixer.gateways.llm import LLMGateway
+from context_mixer.domain.commit_message import CommitMessage
+from context_mixer.domain.llm_instructions import git_commit_system_message
+from context_mixer.gateways.llm import LLMGateway
 
 
 def generate_commit_message(llm_gateway: LLMGateway, diff: str) -> CommitMessage:

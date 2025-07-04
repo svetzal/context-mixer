@@ -5,9 +5,9 @@ from typing import AnyStr
 
 import pytest
 
-from prompt_mixer.commands.init import do_init
-from prompt_mixer.gateways.git import GitGateway
-from prompt_mixer.config import Config
+from context_mixer.commands.init import do_init
+from context_mixer.gateways.git import GitGateway
+from context_mixer.config import Config
 
 
 @pytest.fixture

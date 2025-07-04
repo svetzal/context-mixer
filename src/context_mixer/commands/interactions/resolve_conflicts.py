@@ -1,6 +1,6 @@
 from typing import List
 
-from prompt_mixer.domain.conflict import Conflict
+from context_mixer.domain.conflict import Conflict
 
 
 def resolve_conflicts(conflicts: List[Conflict], console) -> List[Conflict]:

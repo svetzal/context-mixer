@@ -20,13 +20,13 @@ from mojentic.llm.gateways import OpenAIGateway
 from rich.console import Console
 from rich.panel import Panel
 
-from prompt_mixer.commands.init import do_init
-from prompt_mixer.commands.ingest import do_ingest
-from prompt_mixer.commands.open import do_open
-from prompt_mixer.commands.slice import do_slice
-from prompt_mixer.config import Config
-from prompt_mixer.gateways.git import GitGateway
-from prompt_mixer.gateways.llm import LLMGateway
+from context_mixer.commands.init import do_init
+from context_mixer.commands.ingest import do_ingest
+from context_mixer.commands.open import do_open
+from context_mixer.commands.slice import do_slice
+from context_mixer.config import Config
+from context_mixer.gateways.git import GitGateway
+from context_mixer.gateways.llm import LLMGateway
 
 # Create Typer app
 app = typer.Typer(
