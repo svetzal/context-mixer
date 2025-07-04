@@ -1,5 +1,5 @@
 """
-Implementation of the open command for Prompt Mixer.
+Implementation of the open command for Context Mixer.
 
 This module provides the functionality to open the prompt library in the default editor.
 """
@@ -23,7 +23,7 @@ def do_open(console, config):
     path = config.library_path
 
     console.print(
-        Panel(f"Opening prompt library with: [bold]{editor}[/bold]", title="Prompt Mixer"))
+        Panel(f"Opening prompt library with: [bold]{editor}[/bold]", title="Context Mixer"))
 
     try:
         # Run the editor command

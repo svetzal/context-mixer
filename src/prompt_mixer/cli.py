@@ -1,5 +1,5 @@
 """
-Command-line interface for Prompt Mixer.
+Command-line interface for Context Mixer.
 
 This module provides the main entry point for the command-line interface.
 """
@@ -11,7 +11,7 @@ import logging
 
 IS_NOT_YET_IMPLEMENTED = "This functionality is not yet implemented."
 
-APP_NAME = "Prompt Mixer"
+APP_NAME = "Context Mixer"
 
 logging.basicConfig(level=logging.WARN)
 

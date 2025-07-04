@@ -1,10 +1,10 @@
-# Prompt Mixer Development Guidelines
+# Context Mixer Development Guidelines
 
 ## Project Overview
 Provide a single command-line tool (with a roadmap toward optional desktop/UIs) that helps developers create, organise, merge and deploy reusable prompt instructions across multiple GenAI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie).
 
 ## Identity and Branding Guidelines
-As Prompt Mixer is a Mojility product, maintain a consistent identity and branding across all materials:
+As Context Mixer is a Mojility product, maintain a consistent identity and branding across all materials:
 - **Logo**: Use the official Mojility logo in all branding materials, in its original colors and proportions.
 - **Color Palette**:
   - Accent Green: #6bb660  

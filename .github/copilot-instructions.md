@@ -1,4 +1,4 @@
-# Prompt Mixer Development Guidelines
+# Context Mixer Development Guidelines
 
 ## Project Overview
 

@@ -1,5 +1,5 @@
 """
-Slice command implementation for Prompt Mixer.
+Slice command implementation for Context Mixer.
 
 This module provides the implementation of the slice command, which analyzes
 the context.md file and splits it into pieces based on content categories.
@@ -45,7 +45,7 @@ def do_slice(console, config: Config, llm_gateway: LLMGateway, output_path: Opti
         output_dir = output_path or config.library_path / "slices"
         output_dir.mkdir(exist_ok=True, parents=True)
         
-        console.print(Panel(f"Slicing {DEFAULT_ROOT_CONTEXT_FILENAME} into categories", title="Prompt Mixer"))
+        console.print(Panel(f"Slicing {DEFAULT_ROOT_CONTEXT_FILENAME} into categories", title="Context Mixer"))
         
         # Process each category
         for category in categories:

@@ -22,7 +22,7 @@ def do_ingest(console, config: Config, llm_gateway: LLMGateway, filename: Path=N
         commit: Whether to commit changes after ingestion
     """
     console.print(
-        Panel(f"Ingesting prompts from: [bold]{filename}[/bold]", title="Prompt Mixer"))
+        Panel(f"Ingesting prompts from: [bold]{filename}[/bold]", title="Context Mixer"))
 
     try:
         monolith_path = Path(filename)

@@ -1,5 +1,5 @@
 """
-Git operations gateway for Prompt Mixer.
+Git operations gateway for Context Mixer.
 
 This module provides a GitGateway class that handles all git operations
 by delegating to the system git command. It serves as a boundary between

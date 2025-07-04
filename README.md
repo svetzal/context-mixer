@@ -1,10 +1,10 @@
-# Prompt Mixer
+# Context Mixer
 
 A command-line tool to create, organize, merge and deploy reusable prompt instructions across multiple GenAI coding assistants.
 
 ## Purpose
 
-Prompt Mixer helps developers manage prompt fragments for different AI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie) in a structured, version-controlled way.
+Context Mixer helps developers manage prompt fragments for different AI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie) in a structured, version-controlled way.
 
 ## Features
 

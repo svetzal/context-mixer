@@ -17,7 +17,7 @@ def do_init(console, config, remote=None, provider=None, model=None, git_gateway
     path = config.library_path
 
     console.print(
-        Panel(f"Initializing prompt library at [bold]{path}[/bold]", title="Prompt Mixer"))
+        Panel(f"Initializing prompt library at [bold]{path}[/bold]", title="Context Mixer"))
 
     # Create the directory if it doesn't exist
     path.mkdir(parents=True, exist_ok=True)

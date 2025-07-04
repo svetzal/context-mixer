@@ -1,5 +1,5 @@
 """
-Configuration module for Prompt Mixer.
+Configuration module for Context Mixer.
 
 This module provides centralized configuration settings for the application.
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 DEFAULT_ROOT_CONTEXT_FILENAME = "context.md"
 
 class Config:
-    """Configuration settings for Prompt Mixer."""
+    """Configuration settings for Context Mixer."""
 
     def __init__(self, library_path: Path = None):
         """
