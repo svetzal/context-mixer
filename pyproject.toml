@@ -1,5 +1,5 @@
 [project]
-name = "prompt-mixer"
+name = "context-mixer"
 version = "0.1.0"
 description = "A tool to create, organize, merge and deploy reusable prompt instructions across multiple GenAI coding assistants"
 readme = "README.md"
@@ -31,7 +31,7 @@ dev = [
 ]
 
 [project.scripts]
-pmx = "prompt_mixer.cli:app"
+cmx = "prompt_mixer.cli:app"
 
 [project.urls]
 "Homepage" = "https://github.com/svetzal/prompt-mixer"
