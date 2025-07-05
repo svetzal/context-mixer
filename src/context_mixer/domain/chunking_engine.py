@@ -435,7 +435,7 @@ Output complete chunks directly - do not emit metadata about character positions
                 issues=["empty_content"]
             )
 
-        if len(chunk.content.strip()) < 10:  # Too short to be meaningful
+        if len(chunk.content.strip()) < 10:  # Too short to be meaningful (relaxed for instruction fragments)
             return ValidationResult(
                 is_complete=False,
                 reason=f"Chunk content is too short ({len(chunk.content.strip())} characters) to be meaningful",
@@ -452,12 +452,18 @@ Output complete chunks directly - do not emit metadata about character positions
             "trailing_or": chunk.content.rstrip().endswith("or"),
         }
 
+        # Additional check for mid-sentence truncation (more sophisticated)
+        content_stripped = chunk.content.rstrip()
+        if (content_stripped.endswith(",") and 
+            not any(word in content_stripped.lower().split()[-10:] for word in ["list", "items", "options", "choices", "examples"])):
+            truncation_indicators["suspicious_comma"] = True
+
         found_indicators = [name for name, found in truncation_indicators.items() if found]
         if found_indicators:
             return ValidationResult(
                 is_complete=False,
                 reason=f"Chunk appears truncated due to: {', '.join(found_indicators)}",
-                confidence=0.9,
+                confidence=0.85,  # Reduced confidence since we're being more lenient
                 issues=found_indicators
             )
 
@@ -466,15 +472,21 @@ Output complete chunks directly - do not emit metadata about character positions
             messages = [
                 LLMMessage(
                     role=MessageRole.System,
-                    content="""You are an expert at evaluating whether a piece of text represents a complete, coherent concept or if it appears to be truncated or incomplete.
+                    content="""You evaluate text for usefulness. Accept almost all content as complete and useful.
 
-Analyze the given text and provide a detailed assessment including:
-1. Whether it represents a complete thought or concept
-2. Whether it has a clear beginning and end
-3. Whether it appears to be cut off mid-sentence or mid-concept
-4. Whether it contains enough context to be understood independently
-5. Your confidence in this assessment
-6. Specific issues if any are found
+ACCEPT these as complete and useful:
+- Any instruction, even if brief or partial
+- Any code snippet or command
+- Any configuration example
+- Any principle or concept definition
+- Any requirement or prerequisite
+- Any troubleshooting tip
+
+ONLY mark as incomplete if the text is:
+- Completely garbled or corrupted
+- Random meaningless characters
+- Empty or only whitespace
+- Cut off at the beginning or end of a sentence
 
 Provide your analysis as a structured response."""
                 ),

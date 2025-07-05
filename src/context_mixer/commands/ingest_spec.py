@@ -68,8 +68,8 @@ def mock_commit_operation(mocker, mock_git_gateway):
 
 class DescribeDoIngest:
 
-    def should_print_messages_when_ingesting_to_empty_library(self, mock_console, mock_config, mock_llm_gateway, mock_path):
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+    async def should_print_messages_when_ingesting_to_empty_library(self, mock_console, mock_config, mock_llm_gateway, mock_path):
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         assert mock_console.print.call_count >= 3  # At least 3 print calls
         panel_call = mock_console.print.call_args_list[0]
@@ -79,16 +79,16 @@ class DescribeDoIngest:
                                    for call in mock_console.print.call_args_list)
         assert success_message_found
 
-    def should_create_context_file_with_correct_content(self, mock_console, mock_config, mock_llm_gateway, mock_path):
+    async def should_create_context_file_with_correct_content(self, mock_console, mock_config, mock_llm_gateway, mock_path):
         test_content = mock_path.read_text()
 
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         output_file = mock_config.library_path / DEFAULT_ROOT_CONTEXT_FILENAME
         assert output_file.exists()
         assert output_file.read_text() == test_content
 
-    def should_merge_with_existing_context_file(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
+    async def should_merge_with_existing_context_file(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
         # Mock detect_conflicts to return an empty ConflictList (no conflicts)
         from context_mixer.domain.conflict import ConflictList
         mocker.patch('context_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[]))
@@ -101,7 +101,7 @@ class DescribeDoIngest:
         # Set up new content with some overlap
         mock_path.write_text("New line 1\nNew line 2\nShared line")
 
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         # Check that the merged content is the response from the LLM broker
         merged_content = output_file.read_text()
@@ -116,7 +116,7 @@ class DescribeDoIngest:
                                    for call in mock_console.print.call_args_list)
         assert success_message_found
 
-    def should_detect_and_resolve_conflicts(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
+    async def should_detect_and_resolve_conflicts(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
         # Create a mock Conflict object
         indent_4_string = "Use 4 spaces for indentation"
         indent_2_string = "Use 2 spaces for indentation"
@@ -157,7 +157,7 @@ class DescribeDoIngest:
         # Set up mock_console.input to return "1" (choosing the first option)
         mock_console.input.return_value = "1"
 
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         # Check that detect_conflicts was called with the correct arguments
         mock_detect_conflicts.assert_called_once_with(existing_content, new_content, mock_llm_gateway)
@@ -176,7 +176,7 @@ class DescribeDoIngest:
         # Check that the correct message was printed
         assert "Successfully merged prompt with existing context.md" in mock_console.print.call_args_list[-1][0][0]
 
-    def should_commit_changes_after_ingestion(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
+    async def should_commit_changes_after_ingestion(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
         # Create a mock CommitMessage
         commit_msg = CommitMessage(short="Test commit message", long="Detailed test commit message")
 
@@ -194,7 +194,7 @@ class DescribeDoIngest:
         mocker.patch('context_mixer.commands.ingest.CommitOperation', return_value=mock_commit_operation_instance)
 
         # Call do_ingest with commit=True
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=True, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=True, detect_boundaries=False)
 
         # Verify that commit_changes was called with the correct arguments
         mock_commit_operation_instance.commit_changes.assert_called_once_with(mock_config.library_path)

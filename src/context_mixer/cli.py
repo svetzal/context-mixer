@@ -4,6 +4,7 @@ Command-line interface for Context Mixer.
 This module provides the main entry point for the command-line interface.
 """
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Optional, List
@@ -141,7 +142,7 @@ def ingest(
     and style guides into the context library.
     """
     # Create a new config with the specified library path if provided
-    do_ingest(console, Config(library_path), llm_gateway, filename)
+    asyncio.run(do_ingest(console, Config(library_path), llm_gateway, filename))
 
 
 @app.command()

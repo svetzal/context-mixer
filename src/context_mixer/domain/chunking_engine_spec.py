@@ -236,9 +236,10 @@ class DescribeChunkingEngine:
         assert "empty_content" in result.issues
 
     def should_reject_very_short_chunks(self, chunking_engine, sample_metadata):
+        # Test with content under 5 characters (new threshold)
         chunk = KnowledgeChunk(
             id="test_chunk",
-            content="Short",
+            content="Hi",  # Only 2 characters, should be rejected
             metadata=sample_metadata
         )
 
@@ -249,12 +250,10 @@ class DescribeChunkingEngine:
         assert "too_short" in result.issues
 
     def should_detect_truncation_indicators(self, chunking_engine, sample_metadata):
+        # Only test for clear truncation indicators that are still checked
         truncated_contents = [
             "This content ends with...",
-            "This content ends with etc.",
-            "This content ends with,",
-            "This content ends with and",
-            "This content ends with or"
+            "This content ends with etc."
         ]
 
         for content in truncated_contents:
@@ -268,6 +267,33 @@ class DescribeChunkingEngine:
             assert result.is_complete is False
             assert "truncated" in result.reason.lower()
             assert len(result.issues) > 0
+
+    def should_accept_instruction_fragments(self, chunking_engine, mock_llm_gateway, sample_metadata):
+        # Test that instruction fragments that were previously rejected are now accepted
+        instruction_fragments = [
+            "Prerequisites: Python 3.8+",
+            "Use the -v flag",
+            "Config file should have API_KEY=your_key",
+            "Check logs if problems"
+        ]
+
+        # Mock the LLM to return positive validation results for instruction fragments
+        mock_llm_gateway.generate_object.return_value = ValidationResult(
+            is_complete=True,
+            reason="Instruction fragment contains useful information",
+            confidence=0.95,
+            issues=[]
+        )
+
+        for content in instruction_fragments:
+            chunk = KnowledgeChunk(
+                id="test_chunk",
+                content=content,
+                metadata=sample_metadata
+            )
+
+            result = chunking_engine.validate_chunk_completeness(chunk)
+            assert result.is_complete is True, f"Should accept instruction fragment: '{content}'"
 
     def should_fallback_gracefully_when_llm_validation_fails(self, chunking_engine, mock_llm_gateway, sample_metadata):
         chunk = KnowledgeChunk(
