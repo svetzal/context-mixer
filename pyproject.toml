@@ -30,6 +30,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "pytest-asyncio",
     "flake8",
 ]
 
@@ -64,6 +65,9 @@ testpaths = ["src"]
 # Improve readability of test names
 python_functions = ["should_*"]
 python_classes = ["Describe*"]
+
+# Enable async support
+asyncio_mode = "auto"
 
 # Configure test collection
 norecursedirs = [".* build dist venv site"]
