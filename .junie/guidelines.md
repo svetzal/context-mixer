@@ -61,6 +61,16 @@ As Context Mixer is a Mojility product, maintain a consistent identity and brand
 - Document using numpy-style docstrings.  
 - Keep code complexity low (max complexity: 10).
 
+### Using Mojentic
+
+When creating LLMMessage objects, use this pattern with the correct enumeration:
+```
+m = LLMMessage(
+    role=MessageRole.System, # MessageRole.User is the default
+    content="Some string",
+)
+```
+
 ## Testing Guidelines
 - Tests are co-located with implementation files; test filenames use the `*_spec.py` suffix.  
 - Run tests:  

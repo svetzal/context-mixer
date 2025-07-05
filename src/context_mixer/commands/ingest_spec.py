@@ -69,17 +69,20 @@ def mock_commit_operation(mocker, mock_git_gateway):
 class DescribeDoIngest:
 
     def should_print_messages_when_ingesting_to_empty_library(self, mock_console, mock_config, mock_llm_gateway, mock_path):
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False)
+        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
-        assert mock_console.print.call_count >= 2  # At least 2 print calls
+        assert mock_console.print.call_count >= 3  # At least 3 print calls
         panel_call = mock_console.print.call_args_list[0]
         assert isinstance(panel_call[0][0], Panel)
-        assert "Successfully imported prompt as context.md" in mock_console.print.call_args_list[1][0][0]
+        # Check that the success message appears in one of the print calls
+        success_message_found = any("Successfully imported prompt as context.md" in str(call[0][0]) 
+                                   for call in mock_console.print.call_args_list)
+        assert success_message_found
 
     def should_create_context_file_with_correct_content(self, mock_console, mock_config, mock_llm_gateway, mock_path):
         test_content = mock_path.read_text()
 
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False)
+        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         output_file = mock_config.library_path / DEFAULT_ROOT_CONTEXT_FILENAME
         assert output_file.exists()
@@ -98,7 +101,7 @@ class DescribeDoIngest:
         # Set up new content with some overlap
         mock_path.write_text("New line 1\nNew line 2\nShared line")
 
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False)
+        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         # Check that the merged content is the response from the LLM broker
         merged_content = output_file.read_text()
@@ -109,7 +112,9 @@ class DescribeDoIngest:
         mock_llm_gateway.generate.assert_called_once_with(messages=MessageMatcher(expected_content))
 
         # Check that the correct message was printed
-        assert "Successfully merged prompt with existing context.md" in mock_console.print.call_args_list[1][0][0]
+        success_message_found = any("Successfully merged prompt with existing context.md" in str(call[0][0]) 
+                                   for call in mock_console.print.call_args_list)
+        assert success_message_found
 
     def should_detect_and_resolve_conflicts(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
         # Create a mock Conflict object
@@ -152,7 +157,7 @@ class DescribeDoIngest:
         # Set up mock_console.input to return "1" (choosing the first option)
         mock_console.input.return_value = "1"
 
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False)
+        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
 
         # Check that detect_conflicts was called with the correct arguments
         mock_detect_conflicts.assert_called_once_with(existing_content, new_content, mock_llm_gateway)
@@ -189,7 +194,7 @@ class DescribeDoIngest:
         mocker.patch('context_mixer.commands.ingest.CommitOperation', return_value=mock_commit_operation_instance)
 
         # Call do_ingest with commit=True
-        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=True)
+        do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=True, detect_boundaries=False)
 
         # Verify that commit_changes was called with the correct arguments
         mock_commit_operation_instance.commit_changes.assert_called_once_with(mock_config.library_path)
