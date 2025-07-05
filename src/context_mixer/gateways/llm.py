@@ -61,3 +61,15 @@ class LLMGateway:
             An instance of the specified Pydantic model
         """
         return self.llm_broker.generate_object(messages=messages, object_model=object_model)
+
+    def generate_embeddings(self, content: str) -> List[float]:
+        """
+        Generate numerical embeddings for the given content using the LLM.
+
+        Args:
+            content: The text content to generate embeddings for
+
+        Returns:
+            A list of floating point numbers representing the content embedding vector
+        """
+        return self.llm_broker.adapter.calculate_embeddings(content)

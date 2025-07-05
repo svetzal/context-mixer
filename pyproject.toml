@@ -20,6 +20,9 @@ dependencies = [
     "typer",
     "rich",
     "pyyaml",
+    "fastmcp",
+    "chromadb",
+    "chroma-hnswlib",
 ]
 
 [project.optional-dependencies]
