@@ -4,9 +4,11 @@
 
 Provide a single **command‑line tool** (with a roadmap toward optional desktop/UIs) that helps developers *create, organise, merge* and *deploy* reusable prompt instructions across multiple GenAI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie).
 
+The project implements the **CRAFT** (Context-Aware Retrieval and Fusion Technology) system for intelligent knowledge management and context assembly.
+
 ## Identity and Branding Guidelines
 
-As prompt-mixer is a Mojility product, it is important to maintain a consistent identity and branding across all materials. The following guidelines should be followed:
+As Context Mixer is a Mojility product, it is important to maintain a consistent identity and branding across all materials. The following guidelines should be followed:
 
 - **Logo**: Use the official Mojility logo in all branding materials. The logo should be used in its original colors and proportions
 - **Color Palette**: Use the official Mojility color palette for all branding materials. The primary colors are:
@@ -15,7 +17,7 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
 
 ## Tech Stack
 
-- Python 3.11+
+- Python 3.12+
 - Key Dependencies:
   - pydantic 2: Data validation
   - structlog: Logging
@@ -73,6 +75,34 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
     libraries that perform I/O
   - Gateways should not be tested, to avoid mocking what we don't own
 
+## CRAFT System Guidelines
+
+The Context-Aware Retrieval and Fusion Technology (CRAFT) system is the core of Context Mixer. When working with CRAFT components:
+
+### Domain Models
+- Use `KnowledgeChunk` for all knowledge fragments with metadata
+- Apply `AuthorityLevel` (official, verified, community, experimental) for trust scoring
+- Use `ChunkMetadata` for comprehensive chunk information including granularity and domains
+- Implement `ConflictDetection` for identifying contradictory knowledge
+
+### Chunking Engine
+- Leverage `ChunkingEngine` for intelligent semantic boundary detection
+- Use concept-based chunking over simple text splitting
+- Validate chunk completeness before storage
+- Apply hierarchical chunking for complex content
+
+### Knowledge Storage
+- Use `VectorKnowledgeStore` for semantic search and retrieval
+- Implement conflict detection and quarantine mechanisms
+- Support multi-resolution storage (summary to comprehensive)
+- Apply authority-level filtering in queries
+
+### Context Assembly
+- Build context within token budgets for target AI assistants
+- Apply relevance scoring and quality thresholds
+- Support multiple output formats (copilot, claude, cursor, etc.)
+- Implement intelligent content fusion and deduplication
+
 ## Testing Guidelines
 - Tests are co-located with implementation files (test file must be in the same folder as the implementation)
 - We write tests as specifications, therefore you can find all the tests in the *_spec.py files
@@ -111,7 +141,7 @@ As prompt-mixer is a Mojility product, it is important to maintain a consistent 
 ```python
 import pytest
 from typing import AnyStr
-from prompt_mixer.some_module import SomeClass
+from context_mixer.some_module import SomeClass
 
 @pytest.fixture
 def mock_dependency(mocker):
@@ -196,14 +226,14 @@ API documentation uses mkdocstrings, which inserts module, class, and method doc
 eg.
 
 ```
-::: mojentic.llm.MessageBuilder
+:::: context_mixer.domain.knowledge_chunk.KnowledgeChunk
     options:
         show_root_heading: true
         merge_init_into_class: false
         group_by_category: false
 ```
 
-Always use the same `show_root_heading`, `merge_init_into_class`, and `group_by_category` options. Adjust the module and class name after the `:::` as needed.
+Always use the same `show_root_heading`, `merge_init_into_class`, and `group_by_category` options. Adjust the module and class name after the `::::` as needed.
 
 ## Release Process
 

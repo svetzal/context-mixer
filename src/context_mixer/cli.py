@@ -25,6 +25,7 @@ from context_mixer.commands.init import do_init
 from context_mixer.commands.ingest import do_ingest
 from context_mixer.commands.open import do_open
 from context_mixer.commands.slice import do_slice
+from context_mixer.commands.assemble import do_assemble
 from context_mixer.config import Config
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
@@ -77,6 +78,10 @@ def init(
 @app.command()
 def assemble(
         target: str = typer.Argument(..., help="Target AI assistant (e.g., 'copilot', 'claude')"),
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the context library (default: $HOME/.context-mixer)"
+        ),
         output: Optional[Path] = typer.Option(
             None,
             help="Output path for the assembled prompt"
@@ -89,6 +94,14 @@ def assemble(
             None,
             help="Filter fragments by tags (e.g., 'lang:python,layer:testing')"
         ),
+        token_budget: int = typer.Option(
+            8192,
+            help="Maximum token budget for assembled context"
+        ),
+        quality_threshold: float = typer.Option(
+            0.8,
+            help="Minimum quality threshold for included chunks"
+        ),
 ):
     """
     Assemble context fragments for a specific target.
@@ -96,9 +109,17 @@ def assemble(
     Collects relevant fragments, orders them, and renders them into the format
     required by the specified target AI assistant.
     """
-    console.print(
-        Panel(f"Assembling prompts for target: [bold]{target}[/bold]", title=APP_NAME))
-    console.print(IS_NOT_YET_IMPLEMENTED)
+    # Create a new config with the specified library path if provided
+    asyncio.run(do_assemble(
+        console, 
+        Config(library_path), 
+        target, 
+        output, 
+        profile, 
+        filter, 
+        token_budget, 
+        quality_threshold
+    ))
 
 
 @app.command()
