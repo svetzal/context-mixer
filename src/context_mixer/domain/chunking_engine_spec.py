@@ -14,7 +14,9 @@ from context_mixer.domain.chunking_engine import (
     ChunkBoundary,
     BoundaryDetectionResult,
     ConceptAnalysis,
-    ValidationResult
+    ValidationResult,
+    StructuredChunkOutput,
+    ChunkData
 )
 from context_mixer.domain.knowledge import (
     KnowledgeChunk,
@@ -355,3 +357,95 @@ class DescribeConceptAnalysis:
         assert "setup" in sample_concept_analysis.tags
         assert "python" in sample_concept_analysis.dependencies
         assert len(sample_concept_analysis.conflicts_with) == 0
+
+
+class DescribeStructuredOutputChunking:
+    """Test the new structured output chunking approach."""
+
+    @pytest.fixture
+    def structured_output_sample(self):
+        """Sample structured output for testing."""
+        return StructuredChunkOutput(
+            chunks=[
+                ChunkData(
+                    content="# Project Setup Guide\n\nThis guide explains how to set up the development environment for our project.",
+                    concept="Project Setup Introduction",
+                    domains=["technical", "development"],
+                    authority="official",
+                    scope=["general"],
+                    granularity="detailed",
+                    tags=["setup", "guide", "introduction"],
+                    dependencies=[],
+                    conflicts=[]
+                ),
+                ChunkData(
+                    content="## Prerequisites\n\nBefore starting, ensure you have Python 3.8+ installed on your system.\nYou'll also need Git for version control.",
+                    concept="Prerequisites",
+                    domains=["technical", "development"],
+                    authority="official",
+                    scope=["general"],
+                    granularity="detailed",
+                    tags=["prerequisites", "python", "git"],
+                    dependencies=["python", "git"],
+                    conflicts=[]
+                ),
+                ChunkData(
+                    content="## Installation Steps\n\n1. Clone the repository from GitHub\n2. Create a virtual environment\n3. Install dependencies using pip\n4. Run the initial setup script",
+                    concept="Installation Steps",
+                    domains=["technical", "development"],
+                    authority="official",
+                    scope=["general"],
+                    granularity="detailed",
+                    tags=["installation", "setup", "steps"],
+                    dependencies=["python", "git"],
+                    conflicts=[]
+                )
+            ]
+        )
+
+    def should_chunk_using_structured_output(self, chunking_engine, mock_llm_gateway, sample_content, structured_output_sample):
+        """Test that structured output chunking produces complete chunks."""
+        # Mock the LLM to return structured output
+        mock_llm_gateway.generate_object.return_value = structured_output_sample
+
+        chunks = chunking_engine.chunk_by_structured_output(sample_content, source="test.md")
+
+        # Should produce the expected number of chunks
+        assert len(chunks) == 3
+
+        # Each chunk should be complete and have proper metadata
+        for chunk in chunks:
+            assert isinstance(chunk, KnowledgeChunk)
+            assert chunk.content.strip()  # Non-empty content
+            assert chunk.metadata.domains  # Has domains
+            assert chunk.metadata.authority  # Has authority level
+            assert chunk.metadata.tags  # Has tags
+            assert chunk.metadata.provenance.source == "test.md"
+            assert chunk.metadata.provenance.author == "LLM-StructuredChunking"
+
+    def should_fallback_to_character_based_when_structured_fails(self, chunking_engine, mock_llm_gateway, sample_content):
+        """Test that structured output falls back to character-based approach when LLM fails."""
+        # Mock the LLM to raise an exception
+        mock_llm_gateway.generate_object.side_effect = Exception("LLM connection failed")
+
+        chunks = chunking_engine.chunk_by_structured_output(sample_content, source="test.md")
+
+        # Should still produce chunks via fallback
+        assert len(chunks) > 0
+
+        # Chunks should still be valid KnowledgeChunk objects
+        for chunk in chunks:
+            assert isinstance(chunk, KnowledgeChunk)
+            assert chunk.content.strip()
+            assert chunk.metadata.provenance.source == "test.md"
+
+    def should_handle_empty_structured_output(self, chunking_engine, mock_llm_gateway, sample_content):
+        """Test handling of empty structured output."""
+        # Mock the LLM to return empty chunks
+        empty_output = StructuredChunkOutput(chunks=[])
+        mock_llm_gateway.generate_object.return_value = empty_output
+
+        chunks = chunking_engine.chunk_by_structured_output(sample_content, source="test.md")
+
+        # Should fallback and still produce chunks
+        assert len(chunks) > 0

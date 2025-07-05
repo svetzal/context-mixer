@@ -37,11 +37,11 @@ def do_ingest(console, config: Config, llm_gateway: LLMGateway, filename: Path=N
         ingest_content = monolith_path.read_text()
 
         if detect_boundaries:
-            # Use ChunkingEngine for intelligent semantic boundary detection
-            console.print("[blue]Analyzing content for semantic boundaries...[/blue]")
+            # Use ChunkingEngine for intelligent semantic boundary detection with structured output
+            console.print("[blue]Analyzing content using structured LLM output for complete chunks...[/blue]")
 
             chunking_engine = ChunkingEngine(llm_gateway)
-            chunks = chunking_engine.chunk_by_concepts(ingest_content, source=str(filename))
+            chunks = chunking_engine.chunk_by_structured_output(ingest_content, source=str(filename))
 
             # Display chunking results
             if chunks:
