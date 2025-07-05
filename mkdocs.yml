@@ -1,0 +1,65 @@
+site_name: Context Mixer
+site_url: https://github.com/svetzal/context-mixer
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.code.select
+  palette:
+    primary: green
+    accent: green
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [ "src" ]
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://docs.pydantic.dev/latest/objects.inv
+            - https://jcristharif.com/msgspec//objects.inv
+          options:
+            docstring_style: "numpy"
+            heading_level: 1
+            annotations_path: brief
+            extensions:
+              - griffe_fieldz
+      enable_inventory: true
+  - autorefs
+  - llmstxt:
+      full_output: llms-full.txt
+      markdown_description: "Context Mixer is a command-line tool that helps developers create, organize, merge and deploy reusable context instructions across multiple GenAI coding assistants. It implements the CRAFT framework (Chunk, Resist, Adapt, Fit, Transcend) for intelligent knowledge management and context assembly. Context Mixer enables developers to maintain a source-of-truth library of context fragments under Git version control, mix and slice context fragments into variant-specific bundles, ingest and normalize existing context artifacts from multiple projects, and optimize token usage to fit assistant limits."
+      sections:
+        Home:
+          - index.md
+        Getting Started:
+          - installation.md
+        CRAFT Framework:
+          - craft-overview.md
+        Using cmx:
+          - ingesting-prompts.md
+          - assembling-copilot-instructions.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - CRAFT Framework: craft-overview.md
+  - Using cmx:
+      - Ingesting Prompts: ingesting-prompts.md
+      - Assembling Copilot Instructions: assembling-copilot-instructions.md
+
+repo_name: svetzal/context-mixer
+repo_url: https://github.com/svetzal/context-mixer

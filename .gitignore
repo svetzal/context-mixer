@@ -1,6 +1,8 @@
 .idea
 .vscode
 .venv
+site
+dist
 *.egg-info
 __pycache__
 .coverage

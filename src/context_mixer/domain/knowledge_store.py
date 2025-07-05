@@ -7,8 +7,13 @@ details behind domain-focused interfaces.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from .vector_knowledge_store import VectorKnowledgeStore
+    from .file_knowledge_store import FileKnowledgeStore
+    from .hybrid_knowledge_store import HybridKnowledgeStore
 
 from .knowledge import (
     KnowledgeChunk,
@@ -23,7 +28,7 @@ from .knowledge import (
 class KnowledgeStore(ABC):
     """
     Abstract interface for knowledge storage and retrieval.
-    
+
     This interface implements the CRAFT principle of Transcendence by providing
     storage-agnostic operations that work regardless of the underlying storage
     mechanism (vector database, graph database, file system, etc.).
@@ -33,10 +38,10 @@ class KnowledgeStore(ABC):
     async def store_chunks(self, chunks: List[KnowledgeChunk]) -> None:
         """
         Store or update knowledge chunks.
-        
+
         Args:
             chunks: List of KnowledgeChunk objects to store
-            
+
         Raises:
             StorageError: If storage operation fails
         """
@@ -46,13 +51,13 @@ class KnowledgeStore(ABC):
     async def get_chunk(self, chunk_id: str) -> Optional[KnowledgeChunk]:
         """
         Retrieve a specific knowledge chunk by ID.
-        
+
         Args:
             chunk_id: Unique identifier for the chunk
-            
+
         Returns:
             KnowledgeChunk if found, None otherwise
-            
+
         Raises:
             StorageError: If retrieval operation fails
         """
@@ -62,13 +67,13 @@ class KnowledgeStore(ABC):
     async def search(self, query: SearchQuery) -> SearchResults:
         """
         Search for knowledge chunks based on query criteria.
-        
+
         Args:
             query: SearchQuery specifying search criteria and filters
-            
+
         Returns:
             SearchResults containing matching chunks with relevance scores
-            
+
         Raises:
             StorageError: If search operation fails
         """
@@ -78,13 +83,13 @@ class KnowledgeStore(ABC):
     async def delete_chunk(self, chunk_id: str) -> bool:
         """
         Delete a knowledge chunk by ID.
-        
+
         Args:
             chunk_id: Unique identifier for the chunk to delete
-            
+
         Returns:
             True if chunk was deleted, False if not found
-            
+
         Raises:
             StorageError: If deletion operation fails
         """
@@ -94,13 +99,13 @@ class KnowledgeStore(ABC):
     async def get_chunks_by_domain(self, domains: List[str]) -> List[KnowledgeChunk]:
         """
         Retrieve all chunks belonging to specific domains.
-        
+
         Args:
             domains: List of domain names to filter by
-            
+
         Returns:
             List of KnowledgeChunk objects in the specified domains
-            
+
         Raises:
             StorageError: If retrieval operation fails
         """
@@ -110,13 +115,13 @@ class KnowledgeStore(ABC):
     async def get_chunks_by_authority(self, authority_levels: List[AuthorityLevel]) -> List[KnowledgeChunk]:
         """
         Retrieve all chunks with specific authority levels.
-        
+
         Args:
             authority_levels: List of authority levels to filter by
-            
+
         Returns:
             List of KnowledgeChunk objects with specified authority levels
-            
+
         Raises:
             StorageError: If retrieval operation fails
         """
@@ -126,13 +131,13 @@ class KnowledgeStore(ABC):
     async def detect_conflicts(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
         """
         Detect potential conflicts with existing knowledge.
-        
+
         Args:
             chunk: KnowledgeChunk to check for conflicts
-            
+
         Returns:
             List of potentially conflicting chunks
-            
+
         Raises:
             StorageError: If conflict detection fails
         """
@@ -142,13 +147,13 @@ class KnowledgeStore(ABC):
     async def validate_dependencies(self, chunk: KnowledgeChunk) -> List[str]:
         """
         Validate that all dependencies for a chunk exist.
-        
+
         Args:
             chunk: KnowledgeChunk to validate dependencies for
-            
+
         Returns:
             List of missing dependency IDs (empty if all dependencies exist)
-            
+
         Raises:
             StorageError: If validation operation fails
         """
@@ -158,10 +163,10 @@ class KnowledgeStore(ABC):
     async def get_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the knowledge store.
-        
+
         Returns:
             Dictionary containing store statistics (chunk count, domains, etc.)
-            
+
         Raises:
             StorageError: If stats retrieval fails
         """
@@ -171,9 +176,9 @@ class KnowledgeStore(ABC):
     async def reset(self) -> None:
         """
         Reset the knowledge store, removing all data.
-        
+
         Warning: This operation is irreversible.
-        
+
         Raises:
             StorageError: If reset operation fails
         """
@@ -182,7 +187,7 @@ class KnowledgeStore(ABC):
 
 class StorageError(Exception):
     """Exception raised when storage operations fail."""
-    
+
     def __init__(self, message: str, cause: Optional[Exception] = None):
         super().__init__(message)
         self.cause = cause
@@ -191,7 +196,7 @@ class StorageError(Exception):
 class KnowledgeStoreFactory:
     """
     Factory for creating KnowledgeStore instances.
-    
+
     This factory implements the CRAFT principle of Transcendence by allowing
     different storage backends to be created through a unified interface.
     """
@@ -200,10 +205,10 @@ class KnowledgeStoreFactory:
     def create_vector_store(db_path: Path) -> "VectorKnowledgeStore":
         """
         Create a vector-based knowledge store using ChromaDB.
-        
+
         Args:
             db_path: Path to the database directory
-            
+
         Returns:
             VectorKnowledgeStore instance
         """
@@ -214,10 +219,10 @@ class KnowledgeStoreFactory:
     def create_file_store(storage_path: Path) -> "FileKnowledgeStore":
         """
         Create a file-based knowledge store.
-        
+
         Args:
             storage_path: Path to the storage directory
-            
+
         Returns:
             FileKnowledgeStore instance
         """
@@ -231,11 +236,11 @@ class KnowledgeStoreFactory:
     ) -> "HybridKnowledgeStore":
         """
         Create a hybrid knowledge store combining vector and file storage.
-        
+
         Args:
             vector_db_path: Path to the vector database directory
             file_storage_path: Path to the file storage directory
-            
+
         Returns:
             HybridKnowledgeStore instance
         """

@@ -32,6 +32,12 @@ dev = [
     "pytest-mock",
     "pytest-asyncio",
     "flake8",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocs-llmstxt",
+    "mkdocstrings[python]",
+    "griffe-fieldz",
+    "pymdown-extensions",
 ]
 
 [project.scripts]
