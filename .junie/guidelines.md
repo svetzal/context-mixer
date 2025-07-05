@@ -88,7 +88,7 @@ Good example:
 ```python
 import pytest
 from typing import AnyStr
-from prompt_mixer.some_module import SomeClass
+from context_mixer.some_module import SomeClass
 
 @pytest.fixture
 def mock_dependency(mocker):
@@ -110,7 +110,7 @@ class DescribeSomeClass:
 - Built with MkDocs and Material theme.  
 - API documentation uses mkdocstrings:
   ```markdown
-  ::: prompt_mixer.llm.MessageBuilder
+  ::: context_mixer.llm.MessageBuilder
       options:
           show_root_heading: true
           merge_init_into_class: false
@@ -149,8 +149,8 @@ Example scripts are in `src/_examples/`:
 
 Usage example:
 ```python
-from prompt_mixer.llm import LLMBroker
-from prompt_mixer.agents import BaseLLMAgent
+from context_mixer.llm import LLMBroker
+from context_mixer.agents import BaseLLMAgent
 ```
 
 ## Release Process

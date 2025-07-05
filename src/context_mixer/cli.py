@@ -30,8 +30,8 @@ from context_mixer.gateways.llm import LLMGateway
 
 # Create Typer app
 app = typer.Typer(
-    name="pmx",
-    help="A tool to create, organize, merge and deploy reusable prompt instructions.",
+    name="cmx",
+    help="A tool to create, organize, merge and deploy reusable context instructions.",
     add_completion=False,
 )
 
@@ -48,7 +48,7 @@ llm_gateway = LLMGateway(model="o4-mini", gateway=openai_gateway)
 def init(
         library_path: Optional[Path] = typer.Option(
             None,
-            help="Path to initialize the prompt library (default: $HOME/.prompt-mixer)"
+            help="Path to initialize the context library (default: $HOME/.context-mixer)"
         ),
         remote: Optional[str] = typer.Option(
             None,
@@ -64,9 +64,9 @@ def init(
         ),
 ):
     """
-    Initialize a new prompt library.
+    Initialize a new context library.
 
-    Creates a new prompt library at the specified path (or default location),
+    Creates a new context library at the specified path (or default location),
     initializes it as a Git repository, and sets up the default taxonomy structure.
     """
     # Create a new config with the specified path if provided
@@ -90,7 +90,7 @@ def assemble(
         ),
 ):
     """
-    Assemble prompt fragments for a specific target.
+    Assemble context fragments for a specific target.
 
     Collects relevant fragments, orders them, and renders them into the format
     required by the specified target AI assistant.
@@ -104,7 +104,7 @@ def assemble(
 def slice(
         library_path: Optional[Path] = typer.Option(
             None,
-            help="Path to the prompt library (default: $HOME/.prompt-mixer)"
+            help="Path to the context library (default: $HOME/.context-mixer)"
         ),
         output: Optional[Path] = typer.Option(
             None,
@@ -130,15 +130,15 @@ def slice(
 def ingest(
         library_path: Optional[Path] = typer.Option(
             None,
-            help="Path to initialize the prompt library (default: $HOME/.prompt-mixer)"
+            help="Path to initialize the context library (default: $HOME/.context-mixer)"
         ),
         filename: Path = typer.Argument(..., help="Path to instructions to ingest"),
 ):
     """
-    Ingest existing prompt artifacts into the library.
+    Ingest existing context artifacts into the library.
 
-    Analyzes the specified project, imports prompt files, lint configs,
-    and style guides into the prompt library.
+    Analyzes the specified project, imports context files, lint configs,
+    and style guides into the context library.
     """
     # Create a new config with the specified library path if provided
     do_ingest(console, Config(library_path), llm_gateway, filename)
@@ -151,7 +151,7 @@ def sync(
         rebase: bool = typer.Option(False, "--rebase", help="Use rebase strategy when pulling"),
 ):
     """
-    Synchronize the prompt library with a remote Git repository.
+    Synchronize the context library with a remote Git repository.
 
     By default, performs a pull followed by a push. Use flags to limit to
     pull or push only, or to specify the pull strategy.
@@ -174,7 +174,7 @@ def sync(
 @app.command()
 def open():
     """
-    Open the prompt library in the default editor.
+    Open the context library in the default editor.
 
     Uses the editor specified by the $EDITOR environment variable,
     falling back to VS Code if not set.

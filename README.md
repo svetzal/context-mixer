@@ -1,15 +1,15 @@
 # Context Mixer
 
-A command-line tool to create, organize, merge and deploy reusable prompt instructions across multiple GenAI coding assistants.
+A command-line tool to create, organize, merge and deploy reusable context instructions across multiple GenAI coding assistants.
 
 ## Purpose
 
-Context Mixer helps developers manage prompt fragments for different AI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie) in a structured, version-controlled way.
+Context Mixer helps developers manage context fragments for different AI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie) in a structured, version-controlled way.
 
 ## Features
 
-- **Mix & Slice** prompt fragments into variant-specific bundles
-- **Ingest & Normalize** existing prompt artifacts from multiple projects
+- **Mix & Slice** context fragments into variant-specific bundles
+- **Ingest & Normalize** existing context artifacts from multiple projects
 - **Maintain a Source-of-Truth Library** under Git for history and collaboration
 - **Token Optimization** to fit assistant limits
 
@@ -17,14 +17,14 @@ Context Mixer helps developers manage prompt fragments for different AI coding a
 
 ```bash
 # Install with pipx (recommended)
-pipx install prompt-mixer
+pipx install context-mixer
 
 # Or with pip
-pip install prompt-mixer
+pip install context-mixer
 
 # For development
-git clone https://github.com/svetzal/prompt-mixer.git
-cd prompt-mixer
+git clone https://github.com/svetzal/context-mixer.git
+cd context-mixer
 pip install -e ".[dev]"
 ```
 
@@ -37,20 +37,20 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```bash
-# Initialize a new prompt library
-pmx init
+# Initialize a new context library
+cmx init
 
-# Assemble prompts for a specific target
-pmx assemble --target copilot
+# Assemble contexts for a specific target
+cmx assemble --target copilot
 
 # Slice fragments by tags
-pmx slice lang:python layer:testing
+cmx slice lang:python layer:testing
 
-# Ingest existing prompts
-pmx ingest ./my-project
+# Ingest existing contexts
+cmx ingest ./my-project
 
 # Sync with remote repository
-pmx sync
+cmx sync
 ```
 
 ## License

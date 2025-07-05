@@ -22,7 +22,7 @@ def mock_llm_gateway(mocker):
 
 @pytest.fixture
 def mock_generate_commit_message(mocker):
-    return mocker.patch('prompt_mixer.commands.operations.commit.generate_commit_message')
+    return mocker.patch('context_mixer.commands.operations.commit.generate_commit_message')
 
 
 @pytest.fixture

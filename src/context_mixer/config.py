@@ -16,9 +16,9 @@ class Config:
         Initialize a Config object with a library path.
 
         Args:
-            library_path: Path to the prompt library. If None, uses the default path.
+            library_path: Path to the context library. If None, uses the default path.
         """
-        self._library_path = library_path or Path.home() / ".prompt-mixer"
+        self._library_path = library_path or Path.home() / ".context-mixer"
 
     @property
     def library_path(self) -> Path:

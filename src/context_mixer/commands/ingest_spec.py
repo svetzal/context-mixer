@@ -88,7 +88,7 @@ class DescribeDoIngest:
     def should_merge_with_existing_context_file(self, mock_console, mock_config, mock_llm_gateway, mock_path, mocker):
         # Mock detect_conflicts to return an empty ConflictList (no conflicts)
         from context_mixer.domain.conflict import ConflictList
-        mocker.patch('prompt_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[]))
+        mocker.patch('context_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[]))
 
         # Create an existing context.md file
         existing_content = "Existing line 1\nExisting line 2\nShared line"
@@ -126,7 +126,7 @@ class DescribeDoIngest:
 
         # Mock detect_conflicts to return a ConflictList containing the mock Conflict
         from context_mixer.domain.conflict import ConflictList
-        mock_detect_conflicts = mocker.patch('prompt_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[conflict]))
+        mock_detect_conflicts = mocker.patch('context_mixer.commands.operations.merge.detect_conflicts', return_value=ConflictList(list=[conflict]))
 
         # Mock resolve_conflict to return the list of conflicts with resolutions set
         # Create a copy of the conflict with resolution set
@@ -138,7 +138,7 @@ class DescribeDoIngest:
             ],
             resolution=indent_4_string
         )
-        mock_resolve_conflict = mocker.patch('prompt_mixer.commands.operations.merge.resolve_conflicts', return_value=[resolved_conflict])
+        mock_resolve_conflict = mocker.patch('context_mixer.commands.operations.merge.resolve_conflicts', return_value=[resolved_conflict])
 
         # Create an existing context.md file
         existing_content = "# Project Guidelines\n\n## Code Style\n\n- Use 4 spaces for indentation"
@@ -183,10 +183,10 @@ class DescribeDoIngest:
         mock_git_gateway_instance = mocker.MagicMock(spec=GitGateway)
 
         # Mock the GitGateway class
-        mocker.patch('prompt_mixer.commands.ingest.GitGateway', return_value=mock_git_gateway_instance)
+        mocker.patch('context_mixer.commands.ingest.GitGateway', return_value=mock_git_gateway_instance)
 
         # Mock the CommitOperation class
-        mocker.patch('prompt_mixer.commands.ingest.CommitOperation', return_value=mock_commit_operation_instance)
+        mocker.patch('context_mixer.commands.ingest.CommitOperation', return_value=mock_commit_operation_instance)
 
         # Call do_ingest with commit=True
         do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=True)

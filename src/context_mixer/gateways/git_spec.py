@@ -12,7 +12,7 @@ from context_mixer.domain.commit_message import CommitMessage
 
 @pytest.fixture
 def mock_subprocess(mocker):
-    return mocker.patch('prompt_mixer.gateways.git.subprocess.Popen')
+    return mocker.patch('context_mixer.gateways.git.subprocess.Popen')
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 """
-Test helpers for prompt_mixer tests.
+Test helpers for context_mixer tests.
 
-This module contains helper classes and functions for testing prompt_mixer.
+This module contains helper classes and functions for testing context_mixer.
 """
 
 from typing import List
@@ -29,26 +29,29 @@ class MessageMatcher:
 
     def __eq__(self, other):
         """
-        Check if the other object is a list with one LLMMessage object and if that LLMMessage's
+        Check if the other object is a list of LLMMessage objects and if any of those LLMMessage's
         content contains all the expected content parts.
 
         Args:
             other: The object to compare with
 
         Returns:
-            True if the other object is a list with one LLMMessage object and if that LLMMessage's
+            True if the other object is a list of LLMMessage objects and if any of those LLMMessage's
             content contains all the expected content parts, False otherwise
         """
-        # Check if other is a list with one LLMMessage
-        if not isinstance(other, list) or len(other) != 1:
+        # Check if other is a list
+        if not isinstance(other, list) or len(other) == 0:
             return False
 
-        # Check if the message contains all expected content parts
-        message = other[0]
-        if not isinstance(message, LLMMessage):
-            return False
+        # Check if any message contains all expected content parts
+        for message in other:
+            if not isinstance(message, LLMMessage):
+                continue
 
-        return all(part in message.content for part in self.expected_content_parts)
+            if all(part in message.content for part in self.expected_content_parts):
+                return True
+
+        return False
 
     def __repr__(self):
         """

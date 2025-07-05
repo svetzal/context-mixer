@@ -1,7 +1,7 @@
 [project]
 name = "context-mixer"
 version = "0.1.0"
-description = "A tool to create, organize, merge and deploy reusable prompt instructions across multiple GenAI coding assistants"
+description = "A tool to create, organize, merge and deploy reusable context instructions across multiple GenAI coding assistants"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -31,11 +31,11 @@ dev = [
 ]
 
 [project.scripts]
-cmx = "prompt_mixer.cli:app"
+cmx = "context_mixer.cli:app"
 
 [project.urls]
-"Homepage" = "https://github.com/svetzal/prompt-mixer"
-"Bug Tracker" = "https://github.com/svetzal/prompt-mixer/issues"
+"Homepage" = "https://github.com/svetzal/context-mixer"
+"Bug Tracker" = "https://github.com/svetzal/context-mixer/issues"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -46,7 +46,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["prompt_mixer*"]
+include = ["context_mixer*"]
 
 [tool.pytest.ini_options]
 # File patterns for test discovery
