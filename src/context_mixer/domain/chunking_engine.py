@@ -313,8 +313,10 @@ Output complete chunks directly - do not emit metadata about character positions
         # Analyze the chunk content
         try:
             concept_analysis = self._analyze_chunk_concept(chunk_content)
-            # Ensure we got the right type of object
-            if not hasattr(concept_analysis, 'domains'):
+            # Ensure we got the right type of object with valid enum values
+            if (not hasattr(concept_analysis, 'domains') or 
+                not isinstance(concept_analysis.authority_level, AuthorityLevel) or
+                not isinstance(concept_analysis.granularity, GranularityLevel)):
                 raise ValueError("Invalid concept analysis result")
         except Exception:
             # Fallback analysis

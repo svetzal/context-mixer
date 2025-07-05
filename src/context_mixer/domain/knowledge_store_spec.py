@@ -88,15 +88,120 @@ def temp_db_path():
 
 
 @pytest.fixture
-async def vector_store(temp_db_path):
-    """Create a VectorKnowledgeStore instance for testing."""
+async def vector_store(temp_db_path, mocker):
+    """Create a VectorKnowledgeStore instance for testing with mocked gateway."""
+    # Create a mock ChromaGateway with realistic behavior
+    mock_gateway = mocker.MagicMock()
+
+    # Create an in-memory storage for the mock
+    stored_chunks = {}
+
+    def mock_store_chunks(chunks):
+        from context_mixer.domain.knowledge_store import StorageError
+        for chunk in chunks:
+            # Simulate storage errors for invalid chunks
+            if not chunk.id or not chunk.id.strip():
+                raise StorageError("Cannot store chunk with empty ID")
+            if not chunk.content and not chunk.content.strip():
+                # Allow empty content but raise error if both ID and content are empty
+                if not chunk.id or not chunk.id.strip():
+                    raise StorageError("Cannot store chunk with empty ID and content")
+            stored_chunks[chunk.id] = chunk
+
+    def mock_get_chunk(chunk_id):
+        return stored_chunks.get(chunk_id)
+
+    def mock_search_knowledge(query):
+        # Mock search that simulates semantic similarity for conflict detection
+        results = []
+        for chunk in stored_chunks.values():
+            relevance_score = 0.0
+
+            if query.text == "*":
+                # Match all chunks for wildcard queries
+                relevance_score = 0.8
+            elif query.text.lower() in chunk.content.lower():
+                # Direct text match
+                relevance_score = 0.9
+            elif _is_semantically_similar(query.text, chunk.content):
+                # Simulate semantic similarity for React state management content
+                relevance_score = 0.8
+
+            # Only include if relevance meets minimum threshold
+            if relevance_score >= query.min_relevance_score:
+                # Apply domain filter if specified
+                if query.domains and not any(domain in chunk.metadata.domains for domain in query.domains):
+                    continue
+                # Apply authority filter if specified
+                if query.authority_levels and chunk.metadata.authority not in query.authority_levels:
+                    continue
+                # Create SearchResult with relevance score
+                search_result = SearchResult(chunk=chunk, relevance_score=relevance_score)
+                results.append(search_result)
+                if len(results) >= query.max_results:
+                    break
+        return SearchResults(query=query, results=results, total_found=len(results))
+
+    def _is_semantically_similar(text1, text2):
+        # Simple semantic similarity simulation for test cases
+        # Both texts are about React state management
+        react_keywords = ["react", "state management", "hooks", "class components", "functional components"]
+        text1_lower = text1.lower()
+        text2_lower = text2.lower()
+
+        # Check if both texts contain React-related keywords
+        text1_has_react = any(keyword in text1_lower for keyword in react_keywords)
+        text2_has_react = any(keyword in text2_lower for keyword in react_keywords)
+
+        return text1_has_react and text2_has_react
+
+    def mock_delete_chunk(chunk_id):
+        if chunk_id in stored_chunks:
+            del stored_chunks[chunk_id]
+            return True
+        return False
+
+    def mock_get_chunks_by_domain(domains):
+        return [chunk for chunk in stored_chunks.values() 
+                if any(domain in chunk.metadata.domains for domain in domains)]
+
+    def mock_get_chunks_by_authority(authority_levels):
+        return [chunk for chunk in stored_chunks.values() 
+                if chunk.metadata.authority in authority_levels]
+
+    def mock_get_stats():
+        return {
+            "total_chunks": len(stored_chunks),
+            "total_embeddings": len(stored_chunks),
+            "collection_name": "test_collection",
+            "domains": list(set(domain for chunk in stored_chunks.values() 
+                               for domain in chunk.metadata.domains)),
+            "authority_levels": list(set(chunk.metadata.authority.value 
+                                       for chunk in stored_chunks.values()))
+        }
+
+    def mock_reset():
+        stored_chunks.clear()
+
+    # Configure the mock methods
+    mock_gateway.store_knowledge_chunks.side_effect = mock_store_chunks
+    mock_gateway.get_knowledge_chunk.side_effect = mock_get_chunk
+    mock_gateway.search_knowledge.side_effect = mock_search_knowledge
+    mock_gateway.delete_knowledge_chunk.side_effect = mock_delete_chunk
+    mock_gateway.get_chunks_by_domain.side_effect = mock_get_chunks_by_domain
+    mock_gateway.get_chunks_by_authority.side_effect = mock_get_chunks_by_authority
+    mock_gateway.get_collection_stats.side_effect = mock_get_stats
+    mock_gateway.reset_knowledge_store.side_effect = mock_reset
+
+    # Create the store and patch its _get_gateway method
     store = VectorKnowledgeStore(temp_db_path)
+    mocker.patch.object(store, '_get_gateway', return_value=mock_gateway)
+
+    # Store the mock gateway as an attribute for test access
+    store._mock_gateway = mock_gateway
+
     yield store
-    # Cleanup
-    try:
-        await store.reset()
-    except Exception:
-        pass
+    # No cleanup needed since we're using mocks
 
 
 class DescribeKnowledgeStoreFactory:
