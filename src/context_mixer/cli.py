@@ -26,6 +26,13 @@ from context_mixer.commands.ingest import do_ingest
 from context_mixer.commands.open import do_open
 from context_mixer.commands.slice import do_slice
 from context_mixer.commands.assemble import do_assemble
+from context_mixer.commands.quarantine import (
+    do_quarantine_list,
+    do_quarantine_review,
+    do_quarantine_resolve,
+    do_quarantine_stats,
+    do_quarantine_clear
+)
 from context_mixer.config import Config
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
@@ -228,6 +235,124 @@ def open():
     falling back to VS Code if not set.
     """
     do_open(console, Config())
+
+
+# Create quarantine subcommand group
+quarantine_app = typer.Typer(help="Manage quarantined knowledge chunks")
+app.add_typer(quarantine_app, name="quarantine")
+
+
+@quarantine_app.command("list")
+def quarantine_list(
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the context library (default: $HOME/.context-mixer)"
+        ),
+        reason: Optional[str] = typer.Option(
+            None,
+            help="Filter by quarantine reason (semantic_conflict, authority_conflict, etc.)"
+        ),
+        resolved: Optional[bool] = typer.Option(
+            None,
+            help="Filter by resolution status (true for resolved, false for unresolved)"
+        ),
+        priority: Optional[int] = typer.Option(
+            None,
+            help="Filter by priority level (1=high, 5=low)"
+        ),
+        project: Optional[str] = typer.Option(
+            None,
+            help="Filter by project ID"
+        ),
+):
+    """
+    List quarantined knowledge chunks with optional filtering.
+
+    Shows all quarantined chunks that match the specified filters.
+    Use filters to narrow down results by reason, resolution status, priority, or project.
+    """
+    do_quarantine_list(console, Config(library_path), reason, resolved, priority, project)
+
+
+@quarantine_app.command("review")
+def quarantine_review(
+        chunk_id: str = typer.Argument(..., help="ID of the quarantined chunk to review"),
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the context library (default: $HOME/.context-mixer)"
+        ),
+):
+    """
+    Review a specific quarantined chunk in detail.
+
+    Shows comprehensive information about a quarantined chunk including
+    the reason for quarantine, conflicting chunks, and resolution status.
+    """
+    do_quarantine_review(console, Config(library_path), chunk_id)
+
+
+@quarantine_app.command("resolve")
+def quarantine_resolve(
+        chunk_id: str = typer.Argument(..., help="ID of the quarantined chunk to resolve"),
+        action: str = typer.Argument(..., help="Resolution action (accept, reject, merge, modify, defer, escalate)"),
+        reason: str = typer.Argument(..., help="Reason for the resolution"),
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the context library (default: $HOME/.context-mixer)"
+        ),
+        resolved_by: Optional[str] = typer.Option(
+            None,
+            help="Who is resolving the quarantine"
+        ),
+        notes: Optional[str] = typer.Option(
+            None,
+            help="Additional notes about the resolution"
+        ),
+):
+    """
+    Resolve a quarantined chunk with the specified action.
+
+    Available actions:
+    - accept: Accept the chunk, overriding conflicts
+    - reject: Permanently reject the chunk
+    - merge: Merge with existing conflicting knowledge
+    - modify: Modify the chunk to resolve conflicts
+    - defer: Defer resolution to later time
+    - escalate: Escalate to higher authority
+    """
+    do_quarantine_resolve(console, Config(library_path), chunk_id, action, reason, resolved_by, notes)
+
+
+@quarantine_app.command("stats")
+def quarantine_stats(
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the context library (default: $HOME/.context-mixer)"
+        ),
+):
+    """
+    Display quarantine system statistics.
+
+    Shows comprehensive statistics about quarantined chunks including
+    counts by reason, priority breakdown, and age information.
+    """
+    do_quarantine_stats(console, Config(library_path))
+
+
+@quarantine_app.command("clear")
+def quarantine_clear(
+        library_path: Optional[Path] = typer.Option(
+            None,
+            help="Path to the context library (default: $HOME/.context-mixer)"
+        ),
+):
+    """
+    Clear all resolved quarantined chunks from the system.
+
+    Removes all quarantined chunks that have been resolved to clean up
+    the quarantine system. Requires confirmation before proceeding.
+    """
+    do_quarantine_clear(console, Config(library_path))
 
 
 if __name__ == "__main__":

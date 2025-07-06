@@ -52,7 +52,8 @@ Context Mixer will:
 - Analyze the content using CRAFT principles
 - Extract domain-specific knowledge chunks
 - Organize them in your context library
-- Resolve conflicts with existing knowledge
+- Detect and resolve conflicts with existing knowledge
+- Quarantine chunks that cannot be automatically resolved
 
 ### 3. Ingest from Multiple Projects with Project Context
 
@@ -106,6 +107,52 @@ cmx assemble copilot --project-ids "frontend-app,backend-api" --exclude-projects
 - **Better Organization**: Knowledge is logically grouped by project boundaries
 - **Selective Assembly**: Choose exactly which project contexts to include
 - **Provenance Tracking**: Always know which project knowledge came from
+
+## Conflict Detection and Quarantine
+
+### Automatic Conflict Detection
+
+During ingestion, Context Mixer automatically detects various types of conflicts:
+
+- **Semantic Conflicts**: Knowledge that contradicts existing information
+- **Authority Conflicts**: Lower authority knowledge conflicting with official guidance
+- **Temporal Conflicts**: Current knowledge conflicting with deprecated information
+- **Dependency Violations**: Knowledge chunks missing required dependencies
+- **Validation Failures**: Knowledge that fails completeness validation
+
+### Quarantine Process
+
+When conflicts cannot be automatically resolved, Context Mixer quarantines the problematic knowledge chunks:
+
+```bash
+# Example ingestion with quarantine output
+cmx ingest ./my-project --project-id "my-app"
+
+# Output:
+# ✓ Ingested 15 knowledge chunks successfully
+# ⚠ Quarantined 2 chunks due to conflicts:
+#   - semantic_conflict: React patterns conflict with existing guidance
+#   - authority_conflict: Experimental API usage conflicts with official standards
+# 
+# Run 'cmx quarantine list' to review and resolve quarantined items
+```
+
+### Managing Quarantined Knowledge
+
+After ingestion, review and resolve quarantined chunks:
+
+```bash
+# List all quarantined chunks
+cmx quarantine list
+
+# Review a specific chunk
+cmx quarantine review <chunk-id>
+
+# Resolve conflicts
+cmx quarantine resolve <chunk-id> accept "Approved after review"
+```
+
+For detailed information about managing quarantined knowledge, see the [Managing Knowledge Quarantine](managing-quarantine.md) guide.
 
 ## Advanced Ingestion Options
 

@@ -39,6 +39,7 @@ plugins:
         Using cmx:
           - ingesting-prompts.md
           - assembling-copilot-instructions.md
+          - managing-quarantine.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -60,6 +61,7 @@ nav:
   - Using cmx:
       - Ingesting Prompts: ingesting-prompts.md
       - Assembling Copilot Instructions: assembling-copilot-instructions.md
+      - Managing Knowledge Quarantine: managing-quarantine.md
 
 repo_name: svetzal/context-mixer
 repo_url: https://github.com/svetzal/context-mixer

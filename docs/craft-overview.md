@@ -43,7 +43,12 @@ Implement safeguards against knowledge degradation through:
 - **Version control** for all knowledge artifacts
 - **Authority levels** to distinguish official vs. experimental knowledge
 - **Validation rules** to prevent conflicting information
+- **Knowledge quarantine** to isolate conflicts that cannot be automatically resolved
 - **Regular audits** to identify outdated content
+
+Context Mixer's **Knowledge Quarantine System** is the primary implementation of the Resist principle. When conflicts are detected during ingestion that cannot be automatically resolved, the system quarantines problematic knowledge chunks for human review. This prevents knowledge contamination while preserving potentially valuable information for expert evaluation.
+
+Learn more about managing quarantined knowledge in the [Managing Knowledge Quarantine](managing-quarantine.md) guide.
 
 ### 🔄 Adapt: Context-Aware Granularity
 

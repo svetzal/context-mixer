@@ -37,6 +37,9 @@ Import existing context artifacts from multiple projects and normalize them into
 ### 📚 Source-of-Truth Library
 Maintain all context fragments under Git version control for history, collaboration, and consistency.
 
+### 🛡️ Conflict Detection & Quarantine
+Automatically detect knowledge conflicts during ingestion and quarantine problematic chunks for human review, preventing knowledge contamination.
+
 ### ⚡ Token Optimization
 Intelligently select and optimize context to fit within AI assistant token limits while maximizing relevance.
 
@@ -49,6 +52,10 @@ cmx init
 # Ingest existing contexts from your projects
 cmx ingest ./my-react-project
 cmx ingest ./my-python-api
+
+# Review and resolve any quarantined knowledge conflicts
+cmx quarantine list
+cmx quarantine resolve <chunk-id> accept "Approved after review"
 
 # Assemble context for a specific target
 cmx assemble --target copilot --project my-new-app
