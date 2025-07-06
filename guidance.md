@@ -2,15 +2,25 @@
 
 Based on the comprehensive analysis of PLAN.md and the current codebase, here's your clear guidance on what to do next:
 
-## 🎯 **NEXT BEST PRIORITY: Complete the Assemble Command**
+## 🎯 **CRITICAL PRIORITY: Project Context Isolation**
 
-**Why this is the top priority:**
+**Why this is now the top priority:**
+- **CRITICAL GAP IDENTIFIED:** Current system mixes knowledge from different projects without context tracking
+- **Cross-project contamination risk:** Guidance from different projects gets mixed inappropriately
+- **User requirement:** Users need to choose which project contexts to include when assembling
+- **Foundation requirement:** Must be implemented before assemble command to prevent knowledge interference
+
+**Immediate Action:** Implement project-aware capabilities in domain models and CLI commands
+
+## 🎯 **SECONDARY PRIORITY: Complete the Assemble Command**
+
+**Why this follows project isolation:**
 - ChunkingEngine is now fully implemented ✅
 - Knowledge store infrastructure is complete ✅  
-- The assemble command is still showing "not yet implemented" but is critical for end-user value
+- Must include project-aware filtering to prevent cross-project contamination
 - This will make the CLI fully functional and demonstrate the CRAFT system working end-to-end
 
-**Immediate Action:** Implement `src/context_mixer/commands/assemble.py` to replace the placeholder in CLI
+**Immediate Action:** Implement `src/context_mixer/commands/assemble.py` with project-aware filtering
 
 ## Current Status Summary
 
@@ -23,6 +33,30 @@ Based on the comprehensive analysis of PLAN.md and the current codebase, here's 
 - Comprehensive testing infrastructure
 
 **🎯 PHASE 1 CRITICAL GAPS TO COMPLETE:**
+
+### 0. **Project Context Isolation** (CRITICAL PRIORITY)
+**Status:** ❌ **MISSING** - Identified as critical gap preventing multi-project usage
+**Impact:** Cross-project knowledge contamination, inability to select project contexts
+**Action:** Implement project-aware capabilities across the system:
+```python
+# Enhanced domain models
+class ProvenanceInfo(BaseModel):
+    project_id: Optional[str] = Field(None, description="Project identifier")
+    project_name: Optional[str] = Field(None, description="Human-readable project name")
+    project_path: Optional[str] = Field(None, description="Root path of the source project")
+
+# Enhanced search capabilities
+class SearchQuery(BaseModel):
+    project_ids: Optional[List[str]] = Field(None, description="Filter by specific projects")
+    exclude_projects: Optional[List[str]] = Field(None, description="Exclude specific projects")
+```
+**CLI Commands:**
+```bash
+cmx ingest --project-id "react-frontend" --project-name "React Frontend App"
+cmx assemble --project-ids "react-frontend" --exclude-projects "legacy-system"
+cmx projects --list --show-stats
+cmx context-select --projects "react-frontend,python-api" --output copilot-context.md
+```
 
 ### 1. **ChunkingEngine with Semantic Boundary Detection** ✅ **COMPLETED**
 **Status:** ✅ **IMPLEMENTED** - Full implementation with 988 lines of code
@@ -65,6 +99,22 @@ cmx assemble --target copilot --token-budget 8192 --quality-threshold 0.8
 
 ## **IMMEDIATE NEXT STEPS (Priority Order):**
 
+### **STEP 0: Implement Project Context Isolation (CRITICAL PRIORITY)**
+This foundation prevents cross-project knowledge contamination:
+1. Enhance `ProvenanceInfo` domain model with project context fields
+2. Update `SearchQuery` to support project filtering parameters
+3. Modify `ChunkingEngine` to accept project identification during ingestion
+4. Update CLI commands to support project-aware parameters
+5. Implement `ProjectDetector` for automatic project identification
+6. Create `ProjectContextManager` for project-scoped operations
+7. Add project-aware filtering to knowledge store operations
+
+**Key Implementation Points:**
+- Update `src/context_mixer/domain/knowledge.py` with enhanced ProvenanceInfo
+- Modify `src/context_mixer/commands/ingest.py` to accept project parameters
+- Enhance `src/context_mixer/domain/vector_knowledge_store.py` for project filtering
+- Update CLI interface in `src/context_mixer/cli.py` with project options
+
 ### **STEP 1: Implement ChunkingEngine (Week 1)** ✅ **COMPLETED**
 This foundation for intelligent knowledge processing is now complete:
 1. ✅ Create `src/context_mixer/domain/chunking_engine.py` (988 lines)
@@ -73,7 +123,7 @@ This foundation for intelligent knowledge processing is now complete:
 4. ✅ Create validation for chunk completeness
 5. ✅ Write comprehensive tests in `chunking_engine_spec.py` (18,903 bytes)
 
-### **STEP 2: Complete Assemble Command (IMMEDIATE PRIORITY)**
+### **STEP 2: Complete Assemble Command with Project Awareness (SECONDARY PRIORITY)**
 Make the CLI fully functional and demonstrate end-to-end CRAFT workflow:
 1. Create `src/context_mixer/commands/assemble.py`
 2. Replace the "not yet implemented" placeholder in `cli.py`
@@ -105,13 +155,17 @@ Add CRAFT-aware parameters to existing commands:
 
 ## **SUCCESS CRITERIA FOR PHASE 1 COMPLETION:**
 
+- [ ] **Project Context Isolation implemented** - Users can choose which project contexts to include
+- [ ] **Project-aware ingestion** - CLI accepts project identification parameters
+- [ ] **Project-scoped knowledge retrieval** - Search and assembly respect project boundaries
+- [ ] **Cross-project contamination prevention** - Knowledge from different projects doesn't mix inappropriately
 - [x] ✅ ChunkingEngine can detect semantic boundaries in real content
 - [ ] KnowledgeQuarantine can isolate and manage conflicting chunks
 - [ ] Migration tool can convert existing flat files to CRAFT structure
-- [ ] All CLI commands support CRAFT parameters
-- [ ] Assemble command produces working context for AI assistants
+- [ ] All CLI commands support CRAFT and project-aware parameters
+- [ ] Assemble command produces working context for AI assistants with project filtering
 - [x] ✅ All new functionality has comprehensive tests (ChunkingEngine fully tested)
-- [ ] Documentation updated with new capabilities
+- [ ] Documentation updated with new capabilities including project-aware usage
 
 ## **AFTER PHASE 1 - PHASE 2 PREVIEW:**
 

@@ -94,6 +94,14 @@ def assemble(
             None,
             help="Filter fragments by tags (e.g., 'lang:python,layer:testing')"
         ),
+        project_ids: Optional[str] = typer.Option(
+            None,
+            help="Comma-separated list of project IDs to include (e.g., 'react-frontend,python-api')"
+        ),
+        exclude_projects: Optional[str] = typer.Option(
+            None,
+            help="Comma-separated list of project IDs to exclude (e.g., 'legacy-system,deprecated-app')"
+        ),
         token_budget: int = typer.Option(
             8192,
             help="Maximum token budget for assembled context"
@@ -107,8 +115,14 @@ def assemble(
     Assemble context fragments for a specific target.
 
     Collects relevant fragments, orders them, and renders them into the format
-    required by the specified target AI assistant.
+    required by the specified target AI assistant. Use project_ids and 
+    exclude_projects to control which project contexts are included to prevent
+    cross-project contamination.
     """
+    # Parse project filtering parameters
+    project_id_list = project_ids.split(',') if project_ids else None
+    exclude_project_list = exclude_projects.split(',') if exclude_projects else None
+
     # Create a new config with the specified library path if provided
     asyncio.run(do_assemble(
         console, 
@@ -117,6 +131,8 @@ def assemble(
         output, 
         profile, 
         filter, 
+        project_id_list,
+        exclude_project_list,
         token_budget, 
         quality_threshold
     ))
@@ -154,16 +170,26 @@ def ingest(
             None,
             help="Path to initialize the context library (default: $HOME/.context-mixer)"
         ),
-        filename: Path = typer.Argument(..., help="Path to instructions to ingest"),
+        path: Path = typer.Argument(..., help="Path to file or directory to ingest"),
+        project_id: Optional[str] = typer.Option(
+            None,
+            help="Project identifier for organizing knowledge by project"
+        ),
+        project_name: Optional[str] = typer.Option(
+            None,
+            help="Human-readable project name"
+        ),
 ):
     """
     Ingest existing context artifacts into the library.
 
-    Analyzes the specified project, imports context files, lint configs,
-    and style guides into the context library.
+    Analyzes the specified file or project directory, imports context files, 
+    lint configs, and style guides into the context library. Use project_id
+    and project_name to organize knowledge by project and prevent cross-project
+    contamination.
     """
     # Create a new config with the specified library path if provided
-    asyncio.run(do_ingest(console, Config(library_path), llm_gateway, filename))
+    asyncio.run(do_ingest(console, Config(library_path), llm_gateway, path, project_id, project_name))
 
 
 @app.command()

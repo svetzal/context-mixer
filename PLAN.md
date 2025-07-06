@@ -38,11 +38,18 @@ This plan transforms Context-Mixer from a basic prompt fragment manager into a s
 - **Fitting**: No task-type routing or domain filtering beyond basic metadata
 - **Transcendence**: ✓ Storage-agnostic interfaces implemented, knowledge synthesis pending
 
+**CRITICAL GAP: Project Context Isolation**
+- **No project identification** during ingestion - all knowledge mixed together
+- **No project-scoped retrieval** - cannot filter knowledge by source project
+- **No context selection** - users cannot choose which project contexts to include
+- **Cross-project contamination risk** - guidance from different projects gets mixed inappropriately
+
 **Remaining Technical Debt:**
 - ~~Inconsistent naming (prompt-mixer vs context-mixer)~~ (RESOLVED)
 - ~~Simple flat-file taxonomy without rich metadata~~ (RESOLVED)
 - ~~No vector embeddings or semantic search~~ (RESOLVED)
 - ~~Limited knowledge relationships and dependencies~~ (RESOLVED)
+- **Project context tracking and isolation** (HIGH PRIORITY)
 - No MCP integration for agent-facing APIs
 - Advanced CLI features and granularity selection pending
 
@@ -71,6 +78,15 @@ class ChunkMetadata(BaseModel):
     conflicts: List[str] = Field(default_factory=list, description="Chunks this conflicts with")
     tags: List[str] = Field(default_factory=list, description="Searchable tags")
     provenance: ProvenanceInfo = Field(..., description="Source and history tracking")
+
+class ProvenanceInfo(BaseModel):
+    source: str = Field(..., description="Original source file path")
+    project_id: Optional[str] = Field(None, description="Project identifier")
+    project_name: Optional[str] = Field(None, description="Human-readable project name")
+    project_path: Optional[str] = Field(None, description="Root path of the source project")
+    created_at: str = Field(..., description="When this knowledge was created")
+    updated_at: Optional[str] = Field(None, description="When this knowledge was last updated")
+    author: Optional[str] = Field(None, description="Who created or last modified this knowledge")
 ```
 
 **Knowledge Storage Architecture** ✓
@@ -99,6 +115,28 @@ class ChunkMetadata(BaseModel):
 - ✓ Add `ProvenanceTracker` for knowledge source tracking
 - ✓ Create validation pipeline for chunk completeness
 - [ ] Build migration tool from existing flat-file fragments
+
+### 1.4 Project Context Isolation (CRAFT-C Enhancement)
+
+**Project-Aware Knowledge Management**
+- Extend domain models to include project identification and context
+- Implement project-scoped ingestion with automatic project detection
+- Create project-aware knowledge retrieval and filtering
+- Build context selection capabilities for multi-project scenarios
+
+**Project Boundary Detection**
+- Automatic project identification from file paths and repository structure
+- Project metadata extraction (name, type, technology stack)
+- Project relationship modeling (dependencies, shared components)
+- Cross-project knowledge conflict detection and resolution
+
+**Implementation Tasks:**
+- [ ] Enhance `ProvenanceInfo` with project context fields (project_id, project_name, project_path)
+- [ ] Update `ChunkingEngine` to accept project identification parameters
+- [ ] Extend `SearchQuery` to support project filtering (project_ids, exclude_projects)
+- [ ] Implement `ProjectDetector` for automatic project identification
+- [ ] Create `ProjectContextManager` for project-scoped operations
+- [ ] Add project-aware conflict detection to prevent cross-project contamination
 
 ### 1.3 Knowledge Resistance (CRAFT-R)
 
@@ -330,10 +368,10 @@ class ChunkMetadata(BaseModel):
 
 **Enhanced Existing Commands:** (Partially Implemented)
 ```bash
-# Phase 1: Enhanced chunking and resistance
-cmx ingest --detect-boundaries --authority-level official  # ✓ Basic ingest implemented
-cmx slice --granularity detailed --domains technical,business  # ✓ Basic slice implemented
-cmx assemble --target copilot --token-budget 8192 --quality-threshold 0.8  # Placeholder implemented
+# Phase 1: Enhanced chunking and resistance with project context
+cmx ingest --detect-boundaries --authority-level official --project-id "react-frontend" --project-name "React Frontend App"  # ✓ Basic ingest implemented
+cmx slice --granularity detailed --domains technical,business --project-scope "react-frontend,python-api"  # ✓ Basic slice implemented
+cmx assemble --target copilot --token-budget 8192 --quality-threshold 0.8 --project-ids "react-frontend" --exclude-projects "legacy-system"  # Placeholder implemented
 
 # Phase 2: Intelligence and adaptation
 cmx analyze --query "implement user authentication" --task-type develop
@@ -353,10 +391,17 @@ cmx agent-sdk --language python --framework langchain
 
 **New Commands:**
 ```bash
+# Project-aware knowledge management
+cmx projects --list --show-stats  # List all ingested projects with chunk counts
+cmx projects --add "mobile-app" --path "/path/to/mobile" --type "react-native"
+cmx projects --remove "legacy-system" --archive-chunks
+cmx context-select --projects "react-frontend,python-api" --output copilot-context.md
+cmx cross-project --detect-conflicts --resolve-by-authority
+
 # Knowledge management
 cmx refactor --monolith context.md --output-taxonomy why-who-what-how
-cmx dedupe --similarity-threshold 0.9 --preserve-authority
-cmx cluster --method semantic --target-size 50 --auto-label
+cmx dedupe --similarity-threshold 0.9 --preserve-authority --within-projects
+cmx cluster --method semantic --target-size 50 --auto-label --project-scope "frontend"
 
 # Quality and governance
 cmx audit --check-provenance --validate-authority --detect-staleness
@@ -374,13 +419,17 @@ cmx federation --connect-remote --sync-strategy merge --conflict-resolution auth
 **Core Knowledge Resources:**
 - `/knowledge/chunks` - Individual knowledge pieces with metadata
 - `/knowledge/domains` - Domain-specific knowledge collections
+- `/knowledge/projects` - Project-scoped knowledge collections
 - `/knowledge/synthesis` - Cross-domain knowledge combination
 - `/knowledge/relationships` - Knowledge dependency graphs
+- `/knowledge/context-select` - Project-aware context assembly
 
 **Advanced Agent Services:**
-- Real-time context assembly based on agent queries
+- Real-time context assembly based on agent queries with project filtering
+- Project-aware knowledge delivery preventing cross-project contamination
 - Adaptive granularity selection for token constraints
 - Conflict-free knowledge delivery with authority resolution
+- Multi-project context selection and assembly
 - Usage analytics and feedback collection for continuous improvement
 
 ---

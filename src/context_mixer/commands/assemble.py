@@ -30,6 +30,8 @@ async def do_assemble(
     output: Optional[Path] = None,
     profile: Optional[str] = None,
     filter_tags: Optional[str] = None,
+    project_ids: Optional[List[str]] = None,
+    exclude_projects: Optional[List[str]] = None,
     token_budget: int = 8192,
     quality_threshold: float = 0.8
 ):
@@ -43,6 +45,8 @@ async def do_assemble(
         output: Optional output path for the assembled context
         profile: Optional LLM profile specification
         filter_tags: Optional filter string for tags (e.g., 'lang:python,layer:testing')
+        project_ids: Optional list of project IDs to include (prevents cross-project contamination)
+        exclude_projects: Optional list of project IDs to exclude
         token_budget: Maximum token budget for the assembled context
         quality_threshold: Minimum quality threshold for included chunks
     """
@@ -78,8 +82,23 @@ async def do_assemble(
                     tag_filters.append(f.strip())
 
         # Get all chunks with authority filtering (prefer higher authority)
-        authority_levels = [AuthorityLevel.FOUNDATIONAL, AuthorityLevel.OFFICIAL, AuthorityLevel.CONVENTIONAL]
+        # Include DEPRECATED chunks as they represent valid knowledge for legacy systems
+        authority_levels = [AuthorityLevel.FOUNDATIONAL, AuthorityLevel.OFFICIAL, AuthorityLevel.CONVENTIONAL, AuthorityLevel.DEPRECATED]
         chunks = await knowledge_store.get_chunks_by_authority(authority_levels)
+
+        # Apply project filtering first to prevent cross-project contamination
+        if project_ids:
+            # Include only chunks from specified projects
+            project_chunks = await knowledge_store.get_chunks_by_project(project_ids)
+            chunk_ids = {chunk.id for chunk in chunks}
+            chunks = [chunk for chunk in project_chunks if chunk.id in chunk_ids]
+            console.print(f"[cyan]Filtering to include projects: {', '.join(project_ids)}[/cyan]")
+        elif exclude_projects:
+            # Exclude chunks from specified projects
+            excluded_chunks = await knowledge_store.get_chunks_excluding_projects(exclude_projects)
+            chunk_ids = {chunk.id for chunk in chunks}
+            chunks = [chunk for chunk in excluded_chunks if chunk.id in chunk_ids]
+            console.print(f"[cyan]Excluding projects: {', '.join(exclude_projects)}[/cyan]")
 
         # Apply domain filtering if specified
         if domain_filters:

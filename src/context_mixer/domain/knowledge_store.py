@@ -128,6 +128,38 @@ class KnowledgeStore(ABC):
         pass
 
     @abstractmethod
+    async def get_chunks_by_project(self, project_ids: List[str]) -> List[KnowledgeChunk]:
+        """
+        Retrieve all chunks belonging to specific projects.
+
+        Args:
+            project_ids: List of project IDs to filter by
+
+        Returns:
+            List of KnowledgeChunk objects belonging to the specified projects
+
+        Raises:
+            StorageError: If retrieval operation fails
+        """
+        pass
+
+    @abstractmethod
+    async def get_chunks_excluding_projects(self, exclude_project_ids: List[str]) -> List[KnowledgeChunk]:
+        """
+        Retrieve all chunks excluding specific projects.
+
+        Args:
+            exclude_project_ids: List of project IDs to exclude
+
+        Returns:
+            List of KnowledgeChunk objects not belonging to the excluded projects
+
+        Raises:
+            StorageError: If retrieval operation fails
+        """
+        pass
+
+    @abstractmethod
     async def detect_conflicts(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
         """
         Detect potential conflicts with existing knowledge.

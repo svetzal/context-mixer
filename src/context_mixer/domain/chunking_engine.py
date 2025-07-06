@@ -125,7 +125,7 @@ class ChunkingEngine:
         # Use the new unit-based approach that avoids character position problems
         return self._chunk_by_units(content, source)
 
-    def chunk_by_structured_output(self, content: str, source: str = "unknown") -> List[KnowledgeChunk]:
+    def chunk_by_structured_output(self, content: str, source: str = "unknown", project_id: str = None, project_name: str = None, project_path: str = None) -> List[KnowledgeChunk]:
         """
         Chunk content using structured LLM output to directly emit complete chunks.
 
@@ -136,6 +136,9 @@ class ChunkingEngine:
         Args:
             content: The content to chunk
             source: Source identifier for provenance tracking
+            project_id: Project identifier for organizing knowledge by project
+            project_name: Human-readable project name
+            project_path: Root path of the source project
 
         Returns:
             List of KnowledgeChunk objects
@@ -189,6 +192,9 @@ Output complete chunks directly - do not emit metadata about character positions
                 # Create provenance info
                 provenance = ProvenanceInfo(
                     source=source,
+                    project_id=project_id,
+                    project_name=project_name,
+                    project_path=project_path,
                     created_at=datetime.now().isoformat(),
                     author="LLM-StructuredChunking"
                 )

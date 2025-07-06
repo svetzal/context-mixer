@@ -69,7 +69,7 @@ def mock_commit_operation(mocker, mock_git_gateway):
 class DescribeDoIngest:
 
     async def should_print_messages_when_ingesting_to_empty_library(self, mock_console, mock_config, mock_llm_gateway, mock_path):
-        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=mock_path, commit=False, detect_boundaries=False)
 
         assert mock_console.print.call_count >= 3  # At least 3 print calls
         panel_call = mock_console.print.call_args_list[0]
@@ -82,7 +82,7 @@ class DescribeDoIngest:
     async def should_create_context_file_with_correct_content(self, mock_console, mock_config, mock_llm_gateway, mock_path):
         test_content = mock_path.read_text()
 
-        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=mock_path, commit=False, detect_boundaries=False)
 
         output_file = mock_config.library_path / DEFAULT_ROOT_CONTEXT_FILENAME
         assert output_file.exists()
@@ -101,7 +101,7 @@ class DescribeDoIngest:
         # Set up new content with some overlap
         mock_path.write_text("New line 1\nNew line 2\nShared line")
 
-        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=mock_path, commit=False, detect_boundaries=False)
 
         # Check that the merged content is the response from the LLM broker
         merged_content = output_file.read_text()
@@ -157,7 +157,7 @@ class DescribeDoIngest:
         # Set up mock_console.input to return "1" (choosing the first option)
         mock_console.input.return_value = "1"
 
-        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=False, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=mock_path, commit=False, detect_boundaries=False)
 
         # Check that detect_conflicts was called with the correct arguments
         mock_detect_conflicts.assert_called_once_with(existing_content, new_content, mock_llm_gateway)
@@ -194,10 +194,69 @@ class DescribeDoIngest:
         mocker.patch('context_mixer.commands.ingest.CommitOperation', return_value=mock_commit_operation_instance)
 
         # Call do_ingest with commit=True
-        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, filename=mock_path, commit=True, detect_boundaries=False)
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=mock_path, commit=True, detect_boundaries=False)
 
         # Verify that commit_changes was called with the correct arguments
         mock_commit_operation_instance.commit_changes.assert_called_once_with(mock_config.library_path)
 
         # Verify that the success message was printed
         assert "Successfully committed changes: Test commit message" in mock_console.print.call_args_list[-1][0][0]
+
+    async def should_ingest_directory_with_multiple_files(self, mock_console, mock_config, mock_llm_gateway, tmp_path, mocker):
+        # Create a temporary directory with multiple files
+        test_dir = tmp_path / "test_project"
+        test_dir.mkdir()
+
+        # Create some test files
+        readme_file = test_dir / "README.md"
+        readme_file.write_text("# Project README\nThis is the main documentation.")
+
+        docs_dir = test_dir / "docs"
+        docs_dir.mkdir()
+        guide_file = docs_dir / "guide.md"
+        guide_file.write_text("# User Guide\nDetailed instructions for users.")
+
+        copilot_dir = test_dir / ".github"
+        copilot_dir.mkdir()
+        copilot_file = copilot_dir / "copilot-instructions.md"
+        copilot_file.write_text("# Copilot Instructions\nCoding guidelines for AI.")
+
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=test_dir, commit=False, detect_boundaries=False)
+
+        # Verify that multiple files were processed
+        output_file = mock_config.library_path / DEFAULT_ROOT_CONTEXT_FILENAME
+        assert output_file.exists()
+
+        content = output_file.read_text()
+        # Check that content from all files is included
+        assert "Project README" in content
+        assert "User Guide" in content
+        assert "Copilot Instructions" in content
+
+        # Verify console messages - check that we processed multiple files
+        print_calls = [str(call[0][0]) for call in mock_console.print.call_args_list]
+        processing_messages = [msg for msg in print_calls if "Processing:" in msg]
+        assert len(processing_messages) == 3  # Should have processed 3 files
+
+    async def should_handle_empty_directory(self, mock_console, mock_config, mock_llm_gateway, tmp_path):
+        # Create an empty directory
+        empty_dir = tmp_path / "empty_project"
+        empty_dir.mkdir()
+
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=empty_dir, commit=False, detect_boundaries=False)
+
+        # Verify that no files were processed and appropriate message was shown
+        print_calls = [str(call[0][0]) for call in mock_console.print.call_args_list]
+        no_files_message_found = any("No ingestible files found" in msg for msg in print_calls)
+        assert no_files_message_found
+
+    async def should_handle_nonexistent_path(self, mock_console, mock_config, mock_llm_gateway, tmp_path):
+        # Use a path that doesn't exist
+        nonexistent_path = tmp_path / "does_not_exist"
+
+        await do_ingest(console=mock_console, config=mock_config, llm_gateway=mock_llm_gateway, path=nonexistent_path, commit=False, detect_boundaries=False)
+
+        # Verify that error message was shown
+        print_calls = [str(call[0][0]) for call in mock_console.print.call_args_list]
+        error_message_found = any("does not exist" in msg for msg in print_calls)
+        assert error_message_found

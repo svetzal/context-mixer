@@ -150,6 +150,9 @@ class ChromaAdapter:
             "conflicts": ",".join(metadata.conflicts) if metadata.conflicts else "",
             "tags": ",".join(metadata.tags) if metadata.tags else "",
             "source": metadata.provenance.source,
+            "project_id": metadata.provenance.project_id or "",
+            "project_name": metadata.provenance.project_name or "",
+            "project_path": metadata.provenance.project_path or "",
             "created_at": metadata.provenance.created_at,
             "updated_at": metadata.provenance.updated_at or "",
             "author": metadata.provenance.author or ""
@@ -166,6 +169,9 @@ class ChromaAdapter:
         # Provide defaults for missing fields to handle legacy data
         provenance = ProvenanceInfo(
             source=chroma_dict.get("source", "unknown"),
+            project_id=chroma_dict.get("project_id") or None,
+            project_name=chroma_dict.get("project_name") or None,
+            project_path=chroma_dict.get("project_path") or None,
             created_at=chroma_dict.get("created_at", "unknown"),
             updated_at=chroma_dict.get("updated_at") or None,
             author=chroma_dict.get("author") or None
@@ -208,6 +214,15 @@ class ChromaAdapter:
 
         if query.granularity:
             where_conditions["granularity"] = query.granularity.value
+
+        # Add project filtering support
+        if query.project_ids:
+            # Include only chunks from specified projects
+            where_conditions["project_id"] = {"$in": query.project_ids}
+
+        if query.exclude_projects:
+            # Exclude chunks from specified projects
+            where_conditions["project_id"] = {"$nin": query.exclude_projects}
 
         # Only add where clause if we have conditions
         if where_conditions:
