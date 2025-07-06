@@ -12,6 +12,40 @@ Context assembly is where the CRAFT framework really shines. Instead of manually
 4. **Optimizes for token limits** while maximizing relevance
 5. **Assembles coherent instructions** tailored to your specific project
 
+## Semantic Deduplication
+
+**NEW**: Context Mixer now automatically removes redundant content during assembly using semantic deduplication. This powerful feature:
+
+- **Detects semantically similar chunks** across different projects and sources
+- **Eliminates duplicate guidance** that would otherwise clutter your assembled instructions
+- **Selects the highest authority version** when multiple similar chunks exist
+- **Maintains content quality** by preserving the most comprehensive and authoritative guidance
+
+### How Semantic Deduplication Works
+
+When you use domain-based filtering (e.g., `--filter-tags "domain:python"`), Context Mixer automatically:
+
+1. **Analyzes semantic similarity** between all selected chunks using vector embeddings
+2. **Groups similar content** together (e.g., multiple chunks about Python type hints)
+3. **Selects the best chunk** from each group based on:
+   - **Authority level**: FOUNDATIONAL > OFFICIAL > CONVENTIONAL > EXPERIMENTAL > DEPRECATED
+   - **Content comprehensiveness**: Longer, more detailed guidance is preferred
+   - **Recency**: Newer content is preferred when authority and length are equal
+
+### Benefits for Multi-Project Workflows
+
+This is especially valuable when working with multiple projects that share common practices:
+
+```bash
+# Before: Would include duplicate Python practices from multiple projects
+cmx assemble copilot --filter-tags "domain:python,domain:testing"
+
+# Now: Automatically deduplicates similar content, keeping only the best version
+# Result: Clean, non-redundant instructions with the highest quality guidance
+```
+
+**Example**: If you have Python type hint guidance in three different projects with different authority levels (CONVENTIONAL, OFFICIAL, EXPERIMENTAL), semantic deduplication will automatically select and include only the OFFICIAL version in your assembled instructions.
+
 ## Basic Assembly Workflow
 
 ### 1. Analyze Your Project
@@ -259,7 +293,7 @@ Example interactive session:
   Current size: 6,500 tokens
   Target: 8,000 tokens
   Space available: 1,500 tokens
-  
+
   Add examples? [y/N]: y
   Add troubleshooting section? [y/N]: n
 

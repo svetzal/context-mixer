@@ -274,6 +274,48 @@ class VectorKnowledgeStore(KnowledgeStore):
         except Exception as e:
             raise StorageError(f"Failed to detect conflicts: {str(e)}", e)
 
+    async def find_similar_chunks(self, chunk: KnowledgeChunk, similarity_threshold: float = 0.7) -> List[KnowledgeChunk]:
+        """
+        Find semantically similar chunks for deduplication purposes.
+
+        This method finds chunks with similar content regardless of metadata differences,
+        which is useful for deduplication during assembly.
+
+        Args:
+            chunk: KnowledgeChunk to find similar chunks for
+            similarity_threshold: Minimum similarity score (0.0 to 1.0)
+
+        Returns:
+            List of semantically similar chunks
+
+        Raises:
+            StorageError: If similarity detection fails
+        """
+        try:
+            # Search for semantically similar chunks
+            query = SearchQuery(
+                text=chunk.content,
+                max_results=20,
+                min_relevance_score=similarity_threshold
+            )
+            results = await self.search(query)
+
+            similar_chunks = []
+            for result in results.results:
+                candidate = result.chunk
+
+                # Skip the chunk itself
+                if candidate.id == chunk.id:
+                    continue
+
+                # For deduplication, we consider chunks similar if they have high semantic similarity
+                # regardless of metadata differences (unlike conflict detection)
+                similar_chunks.append(candidate)
+
+            return similar_chunks
+        except Exception as e:
+            raise StorageError(f"Failed to find similar chunks: {str(e)}", e)
+
     def _is_potential_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
         """
         Determine if two chunks are potentially conflicting.

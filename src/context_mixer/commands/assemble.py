@@ -121,6 +121,10 @@ async def do_assemble(
         # Sort chunks by authority level and relevance
         chunks.sort(key=lambda c: (c.metadata.authority.value, -len(c.content)))
 
+        # Apply semantic deduplication (default behavior)
+        console.print("[blue]Applying semantic deduplication to remove redundant content...[/blue]")
+        chunks = await _deduplicate_chunks_semantically(chunks, knowledge_store, console)
+
         # Assemble context based on target format
         if target.lower() == 'copilot':
             assembled_content = _assemble_for_copilot(chunks, token_budget, quality_threshold)
@@ -304,6 +308,103 @@ def _assemble_generic(chunks: List, token_budget: int, quality_threshold: float)
         current_tokens += chunk_tokens
 
     return content
+
+
+async def _deduplicate_chunks_semantically(chunks: List, knowledge_store, console) -> List:
+    """
+    Remove semantically similar chunks, keeping the highest authority version.
+
+    Args:
+        chunks: List of KnowledgeChunk objects to deduplicate
+        knowledge_store: Vector knowledge store for similarity detection
+        console: Rich console for output
+
+    Returns:
+        List of deduplicated chunks
+    """
+    if not chunks:
+        return chunks
+
+    deduplicated = []
+    processed_ids = set()
+    similarity_groups = []
+
+    # Find similarity groups
+    for chunk in chunks:
+        if chunk.id in processed_ids:
+            continue
+
+        # Find similar chunks using semantic similarity detection for deduplication
+        try:
+            similar_chunks = await knowledge_store.find_similar_chunks(chunk, similarity_threshold=0.7)
+
+            # Create a group with the current chunk and its similar chunks
+            # Only include chunks that are in our current chunk list
+            chunk_ids_in_list = {c.id for c in chunks}
+            group = [chunk]
+
+            for similar_chunk in similar_chunks:
+                if similar_chunk.id in chunk_ids_in_list and similar_chunk.id not in processed_ids:
+                    group.append(similar_chunk)
+
+            # If we found similar chunks, this is a similarity group
+            if len(group) > 1:
+                similarity_groups.append(group)
+                processed_ids.update(c.id for c in group)
+            else:
+                # No similar chunks found, add the chunk directly
+                deduplicated.append(chunk)
+                processed_ids.add(chunk.id)
+
+        except Exception as e:
+            # If similarity detection fails, include the chunk anyway
+            console.print(f"[yellow]Warning: Could not check similarity for chunk {chunk.id[:8]}: {str(e)}[/yellow]")
+            if chunk.id not in processed_ids:
+                deduplicated.append(chunk)
+                processed_ids.add(chunk.id)
+
+    # Select the best chunk from each similarity group
+    for group in similarity_groups:
+        best_chunk = _select_best_chunk(group)
+        deduplicated.append(best_chunk)
+
+    # Report deduplication results
+    original_count = len(chunks)
+    deduplicated_count = len(deduplicated)
+    removed_count = original_count - deduplicated_count
+
+    if removed_count > 0:
+        console.print(f"[green]Semantic deduplication: Removed {removed_count} redundant chunks, kept {deduplicated_count} unique chunks[/green]")
+    else:
+        console.print(f"[cyan]Semantic deduplication: No redundant chunks found, all {deduplicated_count} chunks are unique[/cyan]")
+
+    return deduplicated
+
+
+def _select_best_chunk(similar_chunks: List) -> object:
+    """
+    Select the best chunk from a group of similar chunks.
+
+    Args:
+        similar_chunks: List of semantically similar chunks
+
+    Returns:
+        The best chunk based on authority, content length, and recency
+    """
+    # Priority: FOUNDATIONAL > OFFICIAL > CONVENTIONAL > EXPERIMENTAL > DEPRECATED
+    authority_priority = {
+        AuthorityLevel.FOUNDATIONAL: 5,
+        AuthorityLevel.OFFICIAL: 4,
+        AuthorityLevel.CONVENTIONAL: 3,
+        AuthorityLevel.EXPERIMENTAL: 2,
+        AuthorityLevel.DEPRECATED: 1
+    }
+
+    return max(similar_chunks, key=lambda c: (
+        authority_priority.get(c.metadata.authority, 0),  # Higher authority first
+        len(c.content),  # Prefer more comprehensive content
+        c.metadata.provenance.created_at  # Prefer newer content (lexicographic comparison)
+    ))
 
 
 def _display_assembly_results(console: Console, chunks: List, content: str, target: str, token_budget: int):
