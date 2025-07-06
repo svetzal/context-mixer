@@ -38,7 +38,7 @@ This is especially valuable when working with multiple projects that share commo
 
 ```bash
 # Before: Would include duplicate Python practices from multiple projects
-cmx assemble copilot --filter-tags "domain:python,domain:testing"
+cmx assemble copilot --filter "domain:python,domain:testing"
 
 # Now: Automatically deduplicates similar content, keeping only the best version
 # Result: Clean, non-redundant instructions with the highest quality guidance
@@ -48,109 +48,81 @@ cmx assemble copilot --filter-tags "domain:python,domain:testing"
 
 ## Basic Assembly Workflow
 
-### 1. Analyze Your Project
-
-First, let Context Mixer understand your project:
-
-```bash
-cd /path/to/your/project
-cmx analyze
-```
-
-This scans your project to identify:
-- Technology stack (React, Python, Java, etc.)
-- Project type (web app, API, mobile, etc.)
-- Existing patterns and conventions
-- Dependencies and frameworks
-
-### 2. Assemble Instructions for GitHub Copilot
+### 1. Assemble Instructions for GitHub Copilot
 
 Generate a copilot-instructions file for your project:
 
 ```bash
-cmx assemble --target copilot
+cmx assemble copilot
 ```
 
-This creates `.github/copilot-instructions.md` with context tailored to your project.
+This creates `.github/copilot-instructions.md` with context tailored to your project, automatically selecting relevant knowledge from your library based on the project context.
 
-### 3. Assemble for Other AI Assistants
+### 2. Assemble for Other AI Assistants
 
 Context Mixer supports multiple AI assistant formats:
 
 ```bash
 # For Cursor
-cmx assemble --target cursor
+cmx assemble cursor
 
 # For Claude
-cmx assemble --target claude
+cmx assemble claude
 
 # For Junie
-cmx assemble --target junie
+cmx assemble junie
 
-# For multiple targets at once
-cmx assemble --target copilot,cursor,claude
+# For multiple targets at once (not currently supported - run separately)
+cmx assemble copilot
+cmx assemble cursor
+cmx assemble claude
 ```
 
 ## Advanced Assembly Options
 
-### Project-Specific Assembly
+### Project-Aware Assembly
 
-Provide additional context about your project:
+Control which project contexts are included to prevent cross-project contamination:
 
 ```bash
-# Specify project type and domain
-cmx assemble --target copilot --project-type "e-commerce web app" --domain frontend
+# Include only specific projects
+cmx assemble copilot --project-ids "react-frontend,python-api"
 
-# Include specific technologies
-cmx assemble --target copilot --tech react,typescript,tailwind,nextjs
+# Exclude specific projects (useful for legacy or deprecated projects)
+cmx assemble copilot --exclude-projects "legacy-system,deprecated-app"
 
-# Specify team or organization context
-cmx assemble --target copilot --team alpha --org enterprise
+# Combine both for precise control
+cmx assemble copilot --project-ids "frontend-app,backend-api" --exclude-projects "experimental-features"
 ```
 
 ### Selective Knowledge Assembly
 
-Choose which knowledge domains to include:
+Choose which knowledge domains to include using tag-based filtering:
 
 ```bash
 # Only include frontend patterns
-cmx assemble --target copilot --domains frontend
+cmx assemble copilot --filter "domain:frontend"
 
 # Include multiple domains
-cmx assemble --target copilot --domains frontend,backend,testing
+cmx assemble copilot --filter "domain:frontend,domain:backend,domain:testing"
 
-# Exclude certain domains
-cmx assemble --target copilot --exclude legacy,experimental
-```
-
-### Authority-Based Assembly
-
-Control the authority level of included knowledge:
-
-```bash
-# Only official, proven patterns
-cmx assemble --target copilot --authority official
-
-# Include experimental patterns for innovation projects
-cmx assemble --target copilot --authority official,experimental
-
-# Include deprecated patterns for legacy maintenance
-cmx assemble --target copilot --authority official,deprecated
+# Filter by technology and layer
+cmx assemble copilot --filter "tech:react,layer:testing"
 ```
 
 ### Token Optimization
 
-Optimize for different context limits:
+Optimize for different context limits and quality thresholds:
 
 ```bash
-# Optimize for GitHub Copilot's limits
-cmx assemble --target copilot --max-tokens 8000
+# Optimize for GitHub Copilot's default limits
+cmx assemble copilot --token-budget 8192
 
 # Create a condensed version for smaller limits
-cmx assemble --target copilot --max-tokens 4000 --priority high
+cmx assemble copilot --token-budget 4096 --quality-threshold 0.9
 
 # Create an extended version for larger contexts
-cmx assemble --target copilot --max-tokens 16000 --include-examples
+cmx assemble copilot --token-budget 16384 --quality-threshold 0.7
 ```
 
 ## Understanding Assembly Output
@@ -203,277 +175,165 @@ Each assembled file includes metadata for traceability:
 
 ### For New Projects
 
-When starting a new project, assemble comprehensive instructions:
+When starting a new project, assemble comprehensive instructions with appropriate filtering:
 
 ```bash
 # Create comprehensive instructions for a new React project
-cmx assemble --target copilot \
-  --project-type "new react web app" \
-  --tech react,typescript,vite \
-  --domains frontend,testing,deployment \
-  --authority official \
-  --include-examples
+cmx assemble copilot \
+  --filter "tech:react,tech:typescript,domain:frontend,domain:testing" \
+  --token-budget 8192 \
+  --quality-threshold 0.8
 ```
 
 ### For Existing Projects
 
-When adding Context Mixer to existing projects, merge with current practices:
+When adding Context Mixer to existing projects, focus on relevant project contexts:
 
 ```bash
-# Analyze existing project patterns first
-cmx analyze --learn-from-project
-
-# Then assemble, incorporating learned patterns
-cmx assemble --target copilot --merge-existing --authority official,project-specific
+# Assemble instructions for a specific project context
+cmx assemble copilot \
+  --project-ids "my-existing-project" \
+  --filter "domain:backend,domain:testing" \
+  --token-budget 6144
 ```
 
 ### For Team Standardization
 
-Create consistent instructions across team projects:
+Create consistent instructions across team projects by including multiple related projects:
 
 ```bash
-# Use team-specific knowledge and standards
-cmx assemble --target copilot \
-  --team backend-team \
-  --domains backend,testing,deployment \
-  --authority official \
-  --template team-standard
+# Use knowledge from multiple team projects
+cmx assemble copilot \
+  --project-ids "frontend-app,backend-api,shared-components" \
+  --filter "domain:frontend,domain:backend" \
+  --token-budget 10240
 ```
 
 ### For Specialized Contexts
 
-Tailor instructions for specific development contexts:
+Tailor instructions for specific development contexts using domain filtering:
 
 ```bash
-# For bug fixing and maintenance
-cmx assemble --target copilot --context debugging --include-troubleshooting
+# For testing-focused development
+cmx assemble copilot --filter "domain:testing,layer:unit,layer:integration"
 
-# For performance optimization
-cmx assemble --target copilot --context performance --domains optimization
+# For performance optimization work
+cmx assemble copilot --filter "domain:performance,domain:optimization"
 
 # For security-focused development
-cmx assemble --target copilot --context security --include-compliance
+cmx assemble copilot --filter "domain:security,domain:compliance"
 ```
 
-## Interactive Assembly
-
-For complex projects, use interactive mode to fine-tune the assembly:
-
-```bash
-cmx assemble --target copilot --interactive
-```
-
-This allows you to:
-- Review and approve each knowledge chunk
-- Resolve conflicts between different approaches
-- Customize the final output
-- Add project-specific notes and exceptions
-
-Example interactive session:
-```
-🤖 Context Mixer Interactive Assembly
-
-📋 Project Analysis:
-  Type: React TypeScript Web App
-  Domains: frontend, testing
-  Technologies: react, typescript, tailwind
-
-🧠 Knowledge Selection:
-  ✓ React functional component patterns (official)
-  ✓ TypeScript best practices (official)
-  ⚠️  Conflict: CSS approach
-    Option 1: Tailwind utility classes (experimental)
-    Option 2: CSS modules (official)
-    Choose [1/2/both]: both
-
-  ✓ Testing with Jest and RTL (official)
-  ? Include performance optimization patterns? [y/N]: y
-
-🔧 Token Optimization:
-  Current size: 6,500 tokens
-  Target: 8,000 tokens
-  Space available: 1,500 tokens
-
-  Add examples? [y/N]: y
-  Add troubleshooting section? [y/N]: n
-
-✅ Assembly complete!
-```
-
-## Updating and Maintaining Instructions
+## Best Practices
 
 ### Regular Updates
 
 Keep your instructions current as your knowledge library evolves:
 
 ```bash
-# Update instructions with latest knowledge
-cmx assemble --target copilot --update
+# Re-assemble instructions after ingesting new knowledge
+cmx assemble copilot --project-ids "my-project" --token-budget 8192
 
-# Check for outdated patterns
-cmx validate-instructions .github/copilot-instructions.md
-
-# Refresh with new knowledge from recent ingestions
-cmx assemble --target copilot --refresh --since "1 week ago"
+# Use quarantine system to review conflicts from new ingestions
+cmx quarantine list
+cmx quarantine resolve <chunk-id> accept "Reviewed and approved"
 ```
 
-### Version Management
+### Combining Multiple Projects
 
-Track changes to your assembled instructions:
+When working on projects that share common patterns:
 
 ```bash
-# Create versioned instructions
-cmx assemble --target copilot --version v2.1
-
-# Compare with previous version
-cmx diff-instructions .github/copilot-instructions.md --version v2.0
-
-# Rollback to previous version if needed
-cmx assemble --target copilot --rollback v2.0
+# Include knowledge from related projects
+cmx assemble copilot \
+  --project-ids "frontend-app,backend-api" \
+  --exclude-projects "legacy-system" \
+  --filter "domain:shared,domain:common"
 ```
 
 ## Multi-Project Workflows
 
 ### Consistent Instructions Across Projects
 
-Maintain consistency across multiple related projects:
+Maintain consistency across multiple related projects using project filtering:
 
 ```bash
-# Create a template for similar projects
-cmx create-template --name "react-web-app" --from ./flagship-project
+# Include knowledge from multiple related projects
+cmx assemble copilot \
+  --project-ids "frontend-app,backend-api,shared-components" \
+  --filter "domain:shared,domain:common" \
+  --token-budget 8192
 
-# Apply template to new projects
-cmx assemble --target copilot --template react-web-app
-
-# Update all projects using a template
-cmx batch-update --template react-web-app --projects ~/work/frontend-*
+# Exclude legacy projects while including current ones
+cmx assemble copilot \
+  --project-ids "current-frontend,current-backend" \
+  --exclude-projects "legacy-system,deprecated-app"
 ```
 
 ### Project-Specific Customizations
 
-While maintaining consistency, allow for project-specific needs:
+While maintaining consistency, focus on specific project contexts:
 
 ```bash
-# Base instructions + project-specific additions
-cmx assemble --target copilot \
-  --base-template react-web-app \
-  --add-context "This project uses GraphQL instead of REST" \
-  --include-domain graphql
+# Focus on specific project with targeted filtering
+cmx assemble copilot \
+  --project-ids "my-graphql-project" \
+  --filter "tech:graphql,domain:api" \
+  --token-budget 6144
 ```
 
 ## Quality Assurance
 
 ### Validation and Testing
 
-Ensure your assembled instructions are high quality:
+Ensure your assembled instructions are high quality by using the quarantine system:
 
 ```bash
-# Validate instruction quality
-cmx validate-instructions .github/copilot-instructions.md
+# Review any quarantined knowledge conflicts
+cmx quarantine list --priority 1
 
-# Test with sample prompts
-cmx test-instructions .github/copilot-instructions.md --prompts test-scenarios.md
+# Resolve conflicts to improve knowledge quality
+cmx quarantine resolve <chunk-id> accept "Reviewed and approved"
 
-# Check for conflicts or contradictions
-cmx check-consistency .github/copilot-instructions.md
+# Check quarantine statistics
+cmx quarantine stats
 ```
 
-### Feedback Integration
+### Iterative Improvement
 
 Improve your knowledge library based on real usage:
 
 ```bash
-# Analyze how well instructions work in practice
-cmx analyze-effectiveness .github/copilot-instructions.md --usage-data
+# Re-assemble after resolving quarantine issues
+cmx assemble copilot --project-ids "my-project" --token-budget 8192
 
-# Update knowledge library based on feedback
-cmx learn-from-usage --project ./current-project --update-library
-```
-
-## Best Practices
-
-### 1. Start Simple, Iterate
-
-Begin with basic assembly and refine over time:
-
-```bash
-# Initial assembly
-cmx assemble --target copilot --authority official
-
-# Add complexity as needed
-cmx assemble --target copilot --authority official,experimental --include-examples
-```
-
-### 2. Maintain Consistency
-
-Use consistent approaches across similar projects:
-
-```bash
-# Define project archetypes
-cmx define-archetype "react-frontend" --domains frontend,testing --tech react,typescript
-
-# Apply archetypes consistently
-cmx assemble --target copilot --archetype react-frontend
-```
-
-### 3. Regular Maintenance
-
-Keep instructions current and relevant:
-
-```bash
-# Monthly knowledge library updates
-cmx update-library --validate --prune-outdated
-
-# Quarterly instruction refresh
-cmx batch-refresh --all-projects --validate
-```
-
-### 4. Team Collaboration
-
-Share and standardize across your team:
-
-```bash
-# Export team standards
-cmx export-standards --team backend --format template
-
-# Import team member's improvements
-cmx import-knowledge --from teammate-library --merge-strategy collaborative
+# Ingest new knowledge and review conflicts
+cmx ingest ./new-project --project-id "new-project"
+cmx quarantine list
 ```
 
 ## Troubleshooting
 
-### Assembly Issues
-
-**Problem**: Assembly produces irrelevant content
-```bash
-# Solution: Be more specific about project context
-cmx assemble --target copilot --project-type "specific description" --exclude irrelevant-domain
-```
+### Common Assembly Issues
 
 **Problem**: Token limit exceeded
 ```bash
-# Solution: Prioritize and optimize
-cmx assemble --target copilot --max-tokens 8000 --priority high --exclude examples
+# Solution: Reduce token budget or increase quality threshold
+cmx assemble copilot --token-budget 6144 --quality-threshold 0.9
 ```
 
-**Problem**: Conflicting guidance
+**Problem**: Irrelevant content included
 ```bash
-# Solution: Use interactive mode to resolve conflicts
-cmx assemble --target copilot --interactive --resolve-conflicts
+# Solution: Use more specific filtering
+cmx assemble copilot --filter "domain:frontend,tech:react" --project-ids "my-react-app"
 ```
 
-### Quality Issues
-
-**Problem**: Instructions too generic
+**Problem**: Missing important knowledge
 ```bash
-# Solution: Add more project-specific context
-cmx assemble --target copilot --learn-from-project --include-project-patterns
-```
-
-**Problem**: Missing important patterns
-```bash
-# Solution: Check knowledge library coverage
-cmx analyze-coverage --project ./current-project --suggest-missing
+# Solution: Check if knowledge is quarantined
+cmx quarantine list
+# Or broaden the filtering criteria
+cmx assemble copilot --project-ids "project1,project2" --quality-threshold 0.7
 ```
 
 ## Next Steps

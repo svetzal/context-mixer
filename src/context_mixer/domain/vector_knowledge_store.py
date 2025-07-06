@@ -345,6 +345,31 @@ class VectorKnowledgeStore(KnowledgeStore):
             chunk2.metadata.temporal == TemporalScope.DEPRECATED):
             return True
 
+        # Check for semantic conflicts in content
+        # Look for contradictory patterns in the content
+        content1_lower = chunk1.content.lower()
+        content2_lower = chunk2.content.lower()
+
+        # Define patterns that indicate contradictory guidance
+        contradictory_patterns = [
+            # Positive vs negative patterns
+            (["always", "ensure", "must", "should", "do"], ["never", "don't", "avoid", "not", "cannot"]),
+            (["use", "enable", "allow"], ["disable", "disallow", "prevent", "block"]),
+            (["include", "add"], ["exclude", "remove", "delete"]),
+            (["required", "mandatory"], ["optional", "forbidden", "prohibited"]),
+        ]
+
+        for positive_words, negative_words in contradictory_patterns:
+            has_positive = any(word in content1_lower for word in positive_words)
+            has_negative = any(word in content2_lower for word in negative_words)
+
+            # Also check the reverse
+            has_positive_reverse = any(word in content2_lower for word in positive_words)
+            has_negative_reverse = any(word in content1_lower for word in negative_words)
+
+            if (has_positive and has_negative) or (has_positive_reverse and has_negative_reverse):
+                return True
+
         return False
 
     async def validate_dependencies(self, chunk: KnowledgeChunk) -> List[str]:

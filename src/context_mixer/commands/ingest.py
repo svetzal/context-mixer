@@ -13,6 +13,8 @@ from context_mixer.gateways.llm import LLMGateway
 from context_mixer.gateways.git import GitGateway
 from context_mixer.domain.chunking_engine import ChunkingEngine
 from context_mixer.domain.knowledge_store import KnowledgeStore, KnowledgeStoreFactory
+from context_mixer.domain.conflict import Conflict, ConflictingGuidance
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
 
 
 def _find_ingestible_files(directory_path: Path) -> list[Path]:
@@ -217,9 +219,70 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 vector_store_path = config.library_path / "vector_store"
                 knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path)
 
+                # Check for conflicts before storing chunks
+                all_conflicts = []
+                chunks_to_store = []
+
+                # First, check for conflicts between chunks within the same ingestion batch
+                console.print("[blue]Checking for conflicts between new chunks...[/blue]")
+                for i, chunk1 in enumerate(valid_chunks):
+                    for j, chunk2 in enumerate(valid_chunks[i+1:], i+1):
+                        try:
+                            # Use the LLM-based conflict detection from merge operations
+                            from context_mixer.commands.operations.merge import detect_conflicts
+                            conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
+                            if conflicts.list:
+                                console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
+                                for conflict in conflicts.list:
+                                    # Update the conflict to indicate it's between new chunks
+                                    updated_conflict = Conflict(
+                                        description=f"Conflicting guidance detected between new chunks: {conflict.description}",
+                                        conflicting_guidance=[
+                                            ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
+                                            ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
+                                        ]
+                                    )
+                                    all_conflicts.append(updated_conflict)
+                        except Exception as e:
+                            console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(e)}[/yellow]")
+
+                # Then, check for conflicts with existing chunks in the knowledge store
+                console.print("[blue]Checking for conflicts with existing content...[/blue]")
+                for chunk in valid_chunks:
+                    try:
+                        conflicting_chunks = await knowledge_store.detect_conflicts(chunk)
+                        if conflicting_chunks:
+                            # Create conflict objects for user resolution
+                            for conflicting_chunk in conflicting_chunks:
+                                conflict = Conflict(
+                                    description=f"Conflicting guidance detected between new content and existing content",
+                                    conflicting_guidance=[
+                                        ConflictingGuidance(content=chunk.content, source="new"),
+                                        ConflictingGuidance(content=conflicting_chunk.content, source="existing")
+                                    ]
+                                )
+                                all_conflicts.append(conflict)
+                        else:
+                            # No conflicts, safe to store
+                            chunks_to_store.append(chunk)
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Failed to check conflicts for chunk {chunk.id[:12]}...: {str(e)}[/yellow]")
+                        # If conflict detection fails, store the chunk anyway
+                        chunks_to_store.append(chunk)
+
+                # Handle conflicts if any were detected
+                if all_conflicts:
+                    console.print(f"\n[yellow]Detected {len(all_conflicts)} conflict(s) that require resolution[/yellow]")
+                    resolved_conflicts = resolve_conflicts(all_conflicts, console)
+
+                    # For now, we'll store all chunks regardless of conflicts
+                    # In a more sophisticated implementation, we might modify chunks based on resolutions
+                    chunks_to_store.extend([chunk for chunk in valid_chunks if chunk not in chunks_to_store])
+                    console.print(f"[green]Conflicts resolved. Proceeding with storage.[/green]")
+
                 try:
-                    await knowledge_store.store_chunks(valid_chunks)
-                    console.print(f"[green]Successfully stored {len(valid_chunks)} chunks in vector knowledge store[/green]")
+                    await knowledge_store.store_chunks(chunks_to_store)
+                    console.print(f"[green]Successfully stored {len(chunks_to_store)} chunks in vector knowledge store[/green]")
                 except Exception as e:
                     console.print(f"[yellow]Warning: Failed to store chunks in vector store: {str(e)}[/yellow]")
                     console.print("[yellow]Continuing with context.md storage as fallback[/yellow]")

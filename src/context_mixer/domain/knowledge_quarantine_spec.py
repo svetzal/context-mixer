@@ -6,7 +6,7 @@ including quarantining chunks, reviewing quarantined items, and resolving confli
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import List
 
 from context_mixer.domain.knowledge_quarantine import (
@@ -34,7 +34,7 @@ def sample_provenance():
         project_id="test-project",
         project_name="Test Project",
         project_path="/path/to/test/project",
-        created_at=datetime.utcnow().isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
         author="test_user"
     )
 
@@ -213,7 +213,7 @@ class DescribeKnowledgeQuarantine:
             project_id="other-project",
             project_name="Other Project",
             project_path="/path/to/other/project",
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(UTC).isoformat()
         )
         different_metadata = ChunkMetadata(
             domains=["technical"],
@@ -401,7 +401,7 @@ class DescribeQuarantinedChunk:
 
     def should_calculate_age_correctly(self, sample_chunk, sample_metadata):
         # Create a quarantined chunk with a specific timestamp
-        past_time = datetime.utcnow() - timedelta(days=5)
+        past_time = datetime.now(UTC) - timedelta(days=5)
         quarantined_chunk = QuarantinedChunk(
             chunk=sample_chunk,
             reason=QuarantineReason.SEMANTIC_CONFLICT,
@@ -446,7 +446,7 @@ class DescribeResolution:
         assert resolution.resolved_at is not None
         # Should be recent (within last minute)
         resolved_time = datetime.fromisoformat(resolution.resolved_at)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         assert (now - resolved_time).total_seconds() < 60
 
     def should_store_modified_chunk_for_modify_action(self, sample_chunk):

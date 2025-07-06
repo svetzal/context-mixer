@@ -155,9 +155,29 @@ def slice(
             None,
             help="Output path for the sliced fragments"
         ),
+        granularity: str = typer.Option(
+            "basic",
+            help="Level of detail: basic, detailed, comprehensive"
+        ),
+        domains: Optional[str] = typer.Option(
+            None,
+            help="Comma-separated list of domains to focus on (technical, business, operational, security, etc.)"
+        ),
+        project_ids: Optional[str] = typer.Option(
+            None,
+            help="Comma-separated list of project IDs to include"
+        ),
+        exclude_projects: Optional[str] = typer.Option(
+            None,
+            help="Comma-separated list of project IDs to exclude"
+        ),
+        authority_level: Optional[str] = typer.Option(
+            None,
+            help="Minimum authority level: official, verified, community, experimental"
+        ),
 ):
     """
-    Analyze context.md and split it into pieces based on content categories.
+    Analyze context.md and split it into pieces based on content categories with CRAFT-aware filtering.
 
     Extracts content about:
     - why (purpose of the project)
@@ -165,10 +185,31 @@ def slice(
     - what (components, technologies, and engineering approaches)
     - how (processes and workflows)
 
+    Enhanced with CRAFT parameters:
+    - Granularity levels for different detail depths
+    - Domain filtering for focused extraction
+    - Project-aware filtering to prevent cross-contamination
+    - Authority-level filtering for quality control
+
     Only creates output files for categories with applicable content.
     """
+    # Parse comma-separated lists
+    domain_list = domains.split(',') if domains else None
+    project_id_list = project_ids.split(',') if project_ids else None
+    exclude_project_list = exclude_projects.split(',') if exclude_projects else None
+
     # Create a new config with the specified library path if provided
-    do_slice(console, Config(library_path), llm_gateway, output)
+    do_slice(
+        console, 
+        Config(library_path), 
+        llm_gateway, 
+        output,
+        granularity=granularity,
+        domains=domain_list,
+        project_ids=project_id_list,
+        exclude_projects=exclude_project_list,
+        authority_level=authority_level
+    )
 
 
 @app.command()

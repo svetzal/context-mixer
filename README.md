@@ -4,14 +4,16 @@ A command-line tool to create, organize, merge and deploy reusable context instr
 
 ## Purpose
 
-Context Mixer helps developers manage context fragments for different AI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie) in a structured, version-controlled way.
+Context Mixer helps developers manage context fragments for different AI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie) in a structured, version-controlled way using the **CRAFT framework** for intelligent knowledge management.
 
 ## Features
 
-- **Mix & Slice** context fragments into variant-specific bundles
-- **Ingest & Normalize** existing context artifacts from multiple projects
-- **Maintain a Source-of-Truth Library** under Git for history and collaboration
-- **Token Optimization** to fit assistant limits
+- **🔄 Mix & Slice** context fragments into variant-specific bundles with CRAFT-aware filtering
+- **📥 Ingest & Normalize** existing context artifacts from multiple projects with project isolation
+- **📚 Source-of-Truth Library** under Git for history and collaboration
+- **🛡️ Conflict Detection & Quarantine** to prevent knowledge contamination
+- **⚡ Token Optimization** with intelligent selection to fit assistant limits
+- **🎯 Project Context Isolation** to prevent cross-project knowledge contamination
 
 ## Installation
 
@@ -40,16 +42,21 @@ pip install -e ".[dev]"
 # Initialize a new context library
 cmx init
 
-# Assemble contexts for a specific target
-cmx assemble --target copilot
+# Ingest existing contexts with project identification
+cmx ingest ./my-react-project --project-id "react-frontend" --project-name "React Frontend App"
+cmx ingest ./my-python-api --project-id "python-api" --project-name "Python REST API"
 
-# Slice fragments by tags
-cmx slice lang:python layer:testing
+# Review and resolve any quarantined knowledge conflicts
+cmx quarantine list
+cmx quarantine resolve <chunk-id> accept "Approved after review"
 
-# Ingest existing contexts
-cmx ingest ./my-project
+# Assemble contexts for a specific target with project filtering
+cmx assemble copilot --project-ids "react-frontend,python-api" --token-budget 8192
 
-# Sync with remote repository
+# Slice context.md into content categories with CRAFT-aware filtering
+cmx slice --granularity detailed --domains technical,business --project-ids "react-frontend"
+
+# Sync with remote repository (coming soon)
 cmx sync
 ```
 

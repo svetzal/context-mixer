@@ -49,19 +49,19 @@ Intelligently select and optimize context to fit within AI assistant token limit
 # Initialize a new context library
 cmx init
 
-# Ingest existing contexts from your projects
-cmx ingest ./my-react-project
-cmx ingest ./my-python-api
+# Ingest existing contexts from your projects with project identification
+cmx ingest ./my-react-project --project-id "react-frontend" --project-name "React Frontend App"
+cmx ingest ./my-python-api --project-id "python-api" --project-name "Python REST API"
 
 # Review and resolve any quarantined knowledge conflicts
 cmx quarantine list
 cmx quarantine resolve <chunk-id> accept "Approved after review"
 
-# Assemble context for a specific target
-cmx assemble --target copilot --project my-new-app
+# Assemble context for a specific target with project filtering
+cmx assemble copilot --project-ids "react-frontend,python-api" --token-budget 8192
 
-# Slice fragments by tags for specific needs
-cmx slice lang:python layer:testing
+# Slice context.md into content categories with CRAFT-aware filtering
+cmx slice --granularity detailed --domains technical,business --project-ids "react-frontend"
 ```
 
 ## Who Should Use Context Mixer?

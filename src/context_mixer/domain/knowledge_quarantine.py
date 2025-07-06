@@ -9,7 +9,7 @@ and resolve conflicts in knowledge management following CRAFT principles.
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, UTC
 import uuid
 
 from .knowledge import KnowledgeChunk, AuthorityLevel
@@ -41,7 +41,7 @@ class Resolution(BaseModel):
     action: ResolutionAction = Field(..., description="The resolution action taken")
     reason: str = Field(..., description="Explanation for the resolution")
     resolved_by: Optional[str] = Field(None, description="Who resolved the quarantine")
-    resolved_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), 
+    resolved_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat(), 
                             description="When the quarantine was resolved")
     modified_chunk: Optional[KnowledgeChunk] = Field(None, 
                                                    description="Modified chunk if action is MODIFY")
@@ -57,42 +57,42 @@ class QuarantinedChunk(BaseModel):
     description: str = Field(..., description="Detailed description of the quarantine reason")
     conflicting_chunks: List[str] = Field(default_factory=list, 
                                         description="IDs of chunks this conflicts with")
-    quarantined_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat(),
+    quarantined_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat(),
                                description="When this chunk was quarantined")
     quarantined_by: Optional[str] = Field(None, description="Who quarantined this chunk")
     priority: int = Field(1, description="Priority for resolution (1=high, 5=low)")
     resolution: Optional[Resolution] = Field(None, description="Resolution if resolved")
-    
+
     def is_resolved(self) -> bool:
         """Check if this quarantined chunk has been resolved."""
         return self.resolution is not None
-    
+
     def get_age_days(self) -> int:
         """Get the age of this quarantine in days."""
         quarantined = datetime.fromisoformat(self.quarantined_at.replace('Z', '+00:00'))
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         return (now - quarantined).days
 
 
 class KnowledgeQuarantine:
     """
     Knowledge Quarantine System for managing conflicting knowledge chunks.
-    
+
     This system isolates knowledge chunks that cannot be automatically resolved
     due to conflicts, validation failures, or other issues. It provides mechanisms
     for reviewing and resolving quarantined chunks.
     """
-    
+
     def __init__(self, storage_path: Optional[str] = None):
         """
         Initialize the knowledge quarantine system.
-        
+
         Args:
             storage_path: Optional path for persistent storage of quarantined chunks
         """
         self._quarantined_chunks: Dict[str, QuarantinedChunk] = {}
         self._storage_path = storage_path
-        
+
     def quarantine_chunk(self, 
                         chunk: KnowledgeChunk, 
                         reason: QuarantineReason,
@@ -102,7 +102,7 @@ class KnowledgeQuarantine:
                         priority: int = 1) -> str:
         """
         Quarantine a knowledge chunk due to conflicts or validation issues.
-        
+
         Args:
             chunk: The knowledge chunk to quarantine
             reason: The reason for quarantine
@@ -110,7 +110,7 @@ class KnowledgeQuarantine:
             conflicting_chunks: List of chunk IDs that this chunk conflicts with
             quarantined_by: Who quarantined this chunk
             priority: Priority for resolution (1=high, 5=low)
-            
+
         Returns:
             The ID of the quarantined chunk
         """
@@ -122,10 +122,10 @@ class KnowledgeQuarantine:
             quarantined_by=quarantined_by,
             priority=priority
         )
-        
+
         self._quarantined_chunks[quarantined_chunk.id] = quarantined_chunk
         return quarantined_chunk.id
-    
+
     def review_quarantined_chunks(self, 
                                  reason_filter: Optional[QuarantineReason] = None,
                                  resolved_filter: Optional[bool] = None,
@@ -133,78 +133,78 @@ class KnowledgeQuarantine:
                                  project_filter: Optional[str] = None) -> List[QuarantinedChunk]:
         """
         Review quarantined chunks with optional filtering.
-        
+
         Args:
             reason_filter: Filter by quarantine reason
             resolved_filter: Filter by resolution status (True=resolved, False=unresolved, None=all)
             priority_filter: Filter by priority level
             project_filter: Filter by project ID
-            
+
         Returns:
             List of quarantined chunks matching the filters
         """
         chunks = list(self._quarantined_chunks.values())
-        
+
         if reason_filter is not None:
             chunks = [c for c in chunks if c.reason == reason_filter]
-            
+
         if resolved_filter is not None:
             chunks = [c for c in chunks if c.is_resolved() == resolved_filter]
-            
+
         if priority_filter is not None:
             chunks = [c for c in chunks if c.priority == priority_filter]
-            
+
         if project_filter is not None:
             chunks = [c for c in chunks if c.chunk.get_project_id() == project_filter]
-        
+
         # Sort by priority (high to low) then by quarantine date (oldest first)
         chunks.sort(key=lambda c: (c.priority, c.quarantined_at))
-        
+
         return chunks
-    
+
     def resolve_quarantine(self, 
                           chunk_id: str, 
                           resolution: Resolution) -> bool:
         """
         Resolve a quarantined chunk with the specified resolution.
-        
+
         Args:
             chunk_id: ID of the quarantined chunk to resolve
             resolution: The resolution to apply
-            
+
         Returns:
             True if the quarantine was successfully resolved, False if chunk not found
         """
         if chunk_id not in self._quarantined_chunks:
             return False
-            
+
         quarantined_chunk = self._quarantined_chunks[chunk_id]
         quarantined_chunk.resolution = resolution
-        
+
         return True
-    
+
     def get_quarantined_chunk(self, chunk_id: str) -> Optional[QuarantinedChunk]:
         """
         Get a specific quarantined chunk by ID.
-        
+
         Args:
             chunk_id: ID of the quarantined chunk
-            
+
         Returns:
             The quarantined chunk if found, None otherwise
         """
         return self._quarantined_chunks.get(chunk_id)
-    
+
     def remove_quarantined_chunk(self, chunk_id: str) -> bool:
         """
         Remove a quarantined chunk from the quarantine system.
-        
+
         This should typically only be done after the chunk has been resolved
         and any necessary actions have been taken.
-        
+
         Args:
             chunk_id: ID of the quarantined chunk to remove
-            
+
         Returns:
             True if the chunk was removed, False if not found
         """
@@ -212,35 +212,35 @@ class KnowledgeQuarantine:
             del self._quarantined_chunks[chunk_id]
             return True
         return False
-    
+
     def get_quarantine_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the quarantine system.
-        
+
         Returns:
             Dictionary containing quarantine statistics
         """
         chunks = list(self._quarantined_chunks.values())
         resolved_chunks = [c for c in chunks if c.is_resolved()]
         unresolved_chunks = [c for c in chunks if not c.is_resolved()]
-        
+
         # Count by reason
         reason_counts = {}
         for chunk in chunks:
             reason = chunk.reason.value
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
-        
+
         # Count by priority
         priority_counts = {}
         for chunk in unresolved_chunks:
             priority = chunk.priority
             priority_counts[priority] = priority_counts.get(priority, 0) + 1
-        
+
         # Age statistics for unresolved chunks
         ages = [c.get_age_days() for c in unresolved_chunks]
         avg_age = sum(ages) / len(ages) if ages else 0
         max_age = max(ages) if ages else 0
-        
+
         return {
             "total_quarantined": len(chunks),
             "resolved": len(resolved_chunks),
@@ -250,11 +250,11 @@ class KnowledgeQuarantine:
             "average_age_days": round(avg_age, 1),
             "oldest_quarantine_days": max_age
         }
-    
+
     def get_high_priority_unresolved(self) -> List[QuarantinedChunk]:
         """
         Get high-priority unresolved quarantined chunks.
-        
+
         Returns:
             List of unresolved chunks with priority 1 or 2, sorted by age
         """
@@ -262,16 +262,16 @@ class KnowledgeQuarantine:
             c for c in self._quarantined_chunks.values() 
             if not c.is_resolved() and c.priority <= 2
         ]
-        
+
         # Sort by age (oldest first)
         high_priority.sort(key=lambda c: c.quarantined_at)
-        
+
         return high_priority
-    
+
     def clear_resolved_chunks(self) -> int:
         """
         Remove all resolved quarantined chunks from the system.
-        
+
         Returns:
             Number of chunks that were removed
         """
@@ -279,8 +279,8 @@ class KnowledgeQuarantine:
             chunk_id for chunk_id, chunk in self._quarantined_chunks.items()
             if chunk.is_resolved()
         ]
-        
+
         for chunk_id in resolved_ids:
             del self._quarantined_chunks[chunk_id]
-            
+
         return len(resolved_ids)
