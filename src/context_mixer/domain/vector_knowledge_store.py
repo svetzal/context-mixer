@@ -234,11 +234,10 @@ class VectorKnowledgeStore(KnowledgeStore):
 
     async def detect_conflicts(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
         """
-        Detect potential conflicts with existing knowledge using semantic similarity.
+        Detect potential conflicts with existing knowledge using LLM-based analysis.
 
-        This implementation uses vector similarity to find chunks with similar
-        content but potentially conflicting metadata (different authority levels,
-        temporal scopes, etc.).
+        This implementation uses semantic similarity to find related chunks, then
+        uses LLM analysis to determine if they actually conflict.
 
         Args:
             chunk: KnowledgeChunk to check for conflicts
@@ -254,7 +253,7 @@ class VectorKnowledgeStore(KnowledgeStore):
             query = SearchQuery(
                 text=chunk.content,
                 max_results=20,
-                min_relevance_score=0.7  # High similarity threshold
+                min_relevance_score=0.5  # Moderate threshold to catch potential conflicts
             )
             results = await self.search(query)
 
@@ -266,8 +265,8 @@ class VectorKnowledgeStore(KnowledgeStore):
                 if candidate.id == chunk.id:
                     continue
 
-                # Check for potential conflicts
-                if self._is_potential_conflict(chunk, candidate):
+                # Use LLM-based conflict detection for accurate analysis
+                if await self._llm_detect_conflict(chunk, candidate):
                     conflicts.append(candidate)
 
             return conflicts
@@ -316,61 +315,50 @@ class VectorKnowledgeStore(KnowledgeStore):
         except Exception as e:
             raise StorageError(f"Failed to find similar chunks: {str(e)}", e)
 
-    def _is_potential_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
+    async def _llm_detect_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
         """
-        Determine if two chunks are potentially conflicting.
+        Use LLM to determine if two chunks are conflicting.
+
+        This method uses the same LLM-based approach as the merge operations,
+        providing a simple, extensible way to detect conflicts without
+        hardcoded rules.
 
         Args:
             chunk1: First chunk to compare
             chunk2: Second chunk to compare
 
         Returns:
-            True if chunks are potentially conflicting
+            True if chunks are conflicting
         """
-        # Check if chunks are in the same domains
-        common_domains = set(chunk1.metadata.domains) & set(chunk2.metadata.domains)
-        if not common_domains:
-            return False
+        try:
+            # Check if chunks are in the same domains (quick filter)
+            common_domains = set(chunk1.metadata.domains) & set(chunk2.metadata.domains)
+            if not common_domains:
+                return False
 
-        # Check for explicit conflicts
-        if chunk1.id in chunk2.metadata.conflicts or chunk2.id in chunk1.metadata.conflicts:
-            return True
-
-        # Check for authority conflicts (different authority levels for similar content)
-        if chunk1.metadata.authority != chunk2.metadata.authority:
-            return True
-
-        # Check for temporal conflicts
-        if (chunk1.metadata.temporal == TemporalScope.CURRENT and 
-            chunk2.metadata.temporal == TemporalScope.DEPRECATED):
-            return True
-
-        # Check for semantic conflicts in content
-        # Look for contradictory patterns in the content
-        content1_lower = chunk1.content.lower()
-        content2_lower = chunk2.content.lower()
-
-        # Define patterns that indicate contradictory guidance
-        contradictory_patterns = [
-            # Positive vs negative patterns
-            (["always", "ensure", "must", "should", "do"], ["never", "don't", "avoid", "not", "cannot"]),
-            (["use", "enable", "allow"], ["disable", "disallow", "prevent", "block"]),
-            (["include", "add"], ["exclude", "remove", "delete"]),
-            (["required", "mandatory"], ["optional", "forbidden", "prohibited"]),
-        ]
-
-        for positive_words, negative_words in contradictory_patterns:
-            has_positive = any(word in content1_lower for word in positive_words)
-            has_negative = any(word in content2_lower for word in negative_words)
-
-            # Also check the reverse
-            has_positive_reverse = any(word in content2_lower for word in positive_words)
-            has_negative_reverse = any(word in content1_lower for word in negative_words)
-
-            if (has_positive and has_negative) or (has_positive_reverse and has_negative_reverse):
+            # Check for explicit conflicts in metadata
+            if chunk1.id in chunk2.metadata.conflicts or chunk2.id in chunk1.metadata.conflicts:
                 return True
 
-        return False
+            # Use LLM to detect semantic conflicts
+            from context_mixer.commands.operations.merge import detect_conflicts
+            from context_mixer.gateways.llm import LLMGateway
+
+            # Create LLM gateway for conflict detection
+            # This could be optimized by passing it in the constructor
+            llm_gateway = LLMGateway()
+
+            conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
+            return len(conflicts.list) > 0
+
+        except Exception:
+            # If LLM detection fails, fall back to basic checks
+            # Check for temporal conflicts
+            if (chunk1.metadata.temporal == TemporalScope.CURRENT and 
+                chunk2.metadata.temporal == TemporalScope.DEPRECATED):
+                return True
+
+            return False
 
     async def validate_dependencies(self, chunk: KnowledgeChunk) -> List[str]:
         """

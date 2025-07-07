@@ -14,7 +14,8 @@ from context_mixer.gateways.git import GitGateway
 from context_mixer.domain.chunking_engine import ChunkingEngine
 from context_mixer.domain.knowledge_store import KnowledgeStore, KnowledgeStoreFactory
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
-from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
+from context_mixer.domain.knowledge import KnowledgeChunk
 
 
 def _find_ingestible_files(directory_path: Path) -> list[Path]:
@@ -68,7 +69,60 @@ def _find_ingestible_files(directory_path: Path) -> list[Path]:
     return sorted(list(set(ingestible_files)))
 
 
-async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True):
+def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_store, console):
+    """
+    Apply conflict resolutions by creating new chunks with resolved content
+    and excluding conflicting chunks from storage.
+
+    Args:
+        resolved_conflicts: List of Conflict objects with resolutions
+        valid_chunks: List of all valid chunks from ingestion
+        chunks_to_store: List of chunks already marked for storage (no conflicts)
+        console: Rich console for output
+
+    Returns:
+        List of additional chunks to store (resolved chunks, excluding conflicting ones)
+    """
+    chunks_to_add = []
+    conflicting_chunk_contents = set()
+
+    # Collect all conflicting chunk contents to exclude them
+    for conflict in resolved_conflicts:
+        for guidance in conflict.conflicting_guidance:
+            conflicting_chunk_contents.add(guidance.content.strip())
+
+    # For each resolved conflict, create a new chunk with the resolved content
+    for conflict in resolved_conflicts:
+        if hasattr(conflict, 'resolution') and conflict.resolution:
+            # Find one of the original conflicting chunks to use as a template
+            template_chunk = None
+            for chunk in valid_chunks:
+                if chunk.content.strip() in conflicting_chunk_contents:
+                    template_chunk = chunk
+                    break
+
+            if template_chunk:
+                # Create a new chunk with the resolved content
+                # Use the template chunk's metadata but update the content
+                resolved_chunk = KnowledgeChunk(
+                    id=template_chunk.id + "_resolved",
+                    content=conflict.resolution,
+                    metadata=template_chunk.metadata,
+                    embedding=None  # Will be generated when stored
+                )
+                chunks_to_add.append(resolved_chunk)
+                console.print(f"[green]Created resolved chunk for conflict: {conflict.description[:50]}...[/green]")
+
+    # Add all non-conflicting chunks that aren't already in chunks_to_store
+    for chunk in valid_chunks:
+        if (chunk.content.strip() not in conflicting_chunk_contents and 
+            chunk not in chunks_to_store):
+            chunks_to_add.append(chunk)
+
+    return chunks_to_add
+
+
+async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None):
     """
     Ingest existing prompt artifacts into the library using intelligent chunking.
 
@@ -81,6 +135,8 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
         project_name: Human-readable project name
         commit: Whether to commit changes after ingestion
         detect_boundaries: Whether to use semantic boundary detection for chunking
+        resolver: Optional automated conflict resolver. If provided, conflicts will be
+                 resolved automatically without user input.
     """
     # Disable tokenizer parallelism to avoid warnings when using async operations
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -273,26 +329,29 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 # Handle conflicts if any were detected
                 if all_conflicts:
                     console.print(f"\n[yellow]Detected {len(all_conflicts)} conflict(s) that require resolution[/yellow]")
-                    resolved_conflicts = resolve_conflicts(all_conflicts, console)
+                    resolved_conflicts = resolve_conflicts(all_conflicts, console, resolver)
 
-                    # For now, we'll store all chunks regardless of conflicts
-                    # In a more sophisticated implementation, we might modify chunks based on resolutions
+                    # Apply conflict resolutions to modify chunks appropriately
+                    chunks_to_store.extend(_apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_store, console))
+                    console.print(f"[green]Conflicts resolved and applied. Proceeding with storage.[/green]")
+                else:
+                    # No conflicts detected, store all remaining chunks
                     chunks_to_store.extend([chunk for chunk in valid_chunks if chunk not in chunks_to_store])
-                    console.print(f"[green]Conflicts resolved. Proceeding with storage.[/green]")
 
                 try:
                     await knowledge_store.store_chunks(chunks_to_store)
                     console.print(f"[green]Successfully stored {len(chunks_to_store)} chunks in vector knowledge store[/green]")
                 except Exception as e:
-                    console.print(f"[yellow]Warning: Failed to store chunks in vector store: {str(e)}[/yellow]")
-                    console.print("[yellow]Continuing with context.md storage as fallback[/yellow]")
+                    console.print(f"[red]Error: Failed to store chunks in vector store: {str(e)}[/red]")
+                    console.print("[red]This is a critical error - user input data could not be stored properly in the vector store![/red]")
+                    console.print("[yellow]Attempting fallback to context.md storage to preserve your data[/yellow]")
 
                 # Create a summary for context.md (for compatibility)
                 summary_content = f"# Ingested Content from {path}\n\n"
                 summary_content += f"Processed on: {chunking_engine._generate_chunk_id('', '')[:8]}\n"
-                summary_content += f"Total chunks: {len(valid_chunks)}\n\n"
+                summary_content += f"Total chunks: {len(chunks_to_store)}\n\n"
 
-                for i, chunk in enumerate(valid_chunks, 1):
+                for i, chunk in enumerate(chunks_to_store, 1):
                     summary_content += f"## Chunk {i}: {chunk.metadata.tags[0] if chunk.metadata.tags else 'Concept'}\n"
                     summary_content += f"**Domain:** {', '.join(chunk.metadata.domains)}\n"
                     summary_content += f"**Authority:** {chunk.metadata.authority.value}\n"

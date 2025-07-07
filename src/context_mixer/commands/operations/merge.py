@@ -2,7 +2,7 @@ from textwrap import dedent
 
 from mojentic.llm import LLMMessage
 
-from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
 from context_mixer.domain.conflict import ConflictList
 from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
 from context_mixer.gateways.llm import LLMGateway
@@ -27,8 +27,8 @@ def detect_conflicts(existing_content: str,
     """
     # Create a prompt for the LLM to detect conflicts
     prompt = clean_prompt(f"""
-        Your task is to carefully analyze these two documents and identify all clearly conflicting
-        guidance or information.
+        Your task is to carefully analyze these two documents and identify ONLY genuine conflicts
+        where they provide contradictory guidance on the same specific topic.
 
         Existing
         ```
@@ -40,13 +40,30 @@ def detect_conflicts(existing_content: str,
         {new_content}
         ```
 
-        Look for any contradictions or conflicts where the documents provide different
-        or opposing guidance on the same topic. Focus on finding a single, obvious conflict
-        where one document is recommending something very different or opposite from the other.
+        A CONFLICT exists ONLY when:
+        1. Both documents address the SAME specific topic or rule
+        2. They provide CONTRADICTORY or MUTUALLY EXCLUSIVE guidance
+        3. Following both pieces of guidance would be impossible or inconsistent
 
-        - something unspecified does not indicate a conflict
+        Examples of REAL conflicts:
+        - "Use 4 spaces for indentation" vs "Use 2 spaces for indentation"
+        - "Always use async/await" vs "Use synchronous calls for better performance"
+        - "Maximum line length 80 characters" vs "Maximum line length 120 characters"
 
-        Create detailed separate structured representations of every individual conflict you find.
+        Examples of NOT conflicts (complementary information):
+        - A header/title and its content details
+        - General guidance and specific implementation details
+        - Different rules for different contexts (e.g., "camelCase for variables" AND "PascalCase for classes" - these are DIFFERENT contexts)
+        - Different naming conventions for different code elements (variables, classes, functions, etc.)
+        - One document being more detailed than another on the same topic
+        - Multiple related but distinct rules that can all be followed simultaneously
+
+        IMPORTANT: If the documents are complementary (one provides headers/structure, 
+        the other provides details), or if they address different aspects of the same 
+        domain, this is NOT a conflict.
+
+        Only create conflict entries for genuine contradictions where both documents 
+        give opposing instructions for the exact same thing.
     """)
 
     messages = [
@@ -60,19 +77,21 @@ def detect_conflicts(existing_content: str,
 
 
 def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGateway,
-                  console=None) -> str:
+                  console=None, resolver: ConflictResolver = None) -> str:
     """
     Merge existing content with new content using an LLM to create a coherent document.
 
     This function first checks for conflicts between the existing and new content.
-    If conflicts are detected, it consults the user to resolve them.
+    If conflicts are detected, it resolves them either interactively or using an automated resolver.
     Then it merges the content, incorporating the resolved conflicts.
 
     Args:
         existing_content: The existing content in context.md
         new_content: The new content to merge
         llm_gateway: The LLM gateway to use for generating the merged content
-        console: Rich console for output (required if conflicts need to be resolved)
+        console: Rich console for output (required if conflicts need to be resolved interactively)
+        resolver: Optional automated conflict resolver. If provided, conflicts will be
+                 resolved automatically without user input.
 
     Returns:
         The merged content
@@ -83,10 +102,10 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
     # If conflicts are detected, resolve them
     resolved_conflicts = None
     if conflicts.list:
-        if not console:
-            raise ValueError("Console is required to resolve conflicts")
+        if not console and not resolver:
+            raise ValueError("Console or resolver is required to resolve conflicts")
 
-        resolved_conflicts = resolve_conflicts(conflicts.list, console)
+        resolved_conflicts = resolve_conflicts(conflicts.list, console, resolver)
 
     # Create a prompt for the LLM to merge the content
     base_prompt = clean_prompt(f"""
