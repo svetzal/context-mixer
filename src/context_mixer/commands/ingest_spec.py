@@ -163,7 +163,7 @@ class DescribeDoIngest:
         mock_detect_conflicts.assert_called_once_with(existing_content, new_content, mock_llm_gateway)
 
         # Check that resolve_conflict was called with the list of conflicts and console
-        mock_resolve_conflict.assert_called_once_with([conflict], mock_console)
+        mock_resolve_conflict.assert_called_once_with([conflict], mock_console, None)
 
         # Check that the merged content is the response from the LLM broker
         merged_content = output_file.read_text()

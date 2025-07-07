@@ -315,6 +315,41 @@ class VectorKnowledgeStore(KnowledgeStore):
         except Exception as e:
             raise StorageError(f"Failed to find similar chunks: {str(e)}", e)
 
+    def _is_potential_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
+        """
+        Check if two chunks are potentially conflicting based on metadata.
+
+        This is a fast, rule-based check that doesn't require LLM inference.
+
+        Args:
+            chunk1: First chunk to compare
+            chunk2: Second chunk to compare
+
+        Returns:
+            True if chunks are potentially conflicting
+        """
+        # Check if chunks are in different domains - no conflict if so
+        common_domains = set(chunk1.metadata.domains) & set(chunk2.metadata.domains)
+        if not common_domains:
+            return False
+
+        # Check for explicit conflicts in metadata
+        if chunk1.id in chunk2.metadata.conflicts or chunk2.id in chunk1.metadata.conflicts:
+            return True
+
+        # Check for authority conflicts (different authority levels)
+        if chunk1.metadata.authority != chunk2.metadata.authority:
+            return True
+
+        # Check for temporal conflicts (current vs deprecated)
+        if (chunk1.metadata.temporal == TemporalScope.CURRENT and 
+            chunk2.metadata.temporal == TemporalScope.DEPRECATED) or \
+           (chunk1.metadata.temporal == TemporalScope.DEPRECATED and 
+            chunk2.metadata.temporal == TemporalScope.CURRENT):
+            return True
+
+        return False
+
     async def _llm_detect_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
         """
         Use LLM to determine if two chunks are conflicting.

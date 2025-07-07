@@ -2,7 +2,7 @@
 """
 Conflict Detection and Resolution Workbench
 
-This script runs automated tests for conflict detection and resolution scenarios.
+This script runs automated integration tests for conflict detection and resolution scenarios.
 It provides a persistent testing environment that accumulates troublesome scenarios
 and ensures we can always pass them all.
 """
@@ -46,6 +46,7 @@ class WorkbenchRunner:
         """Initialize the workbench runner."""
         self.console = Console()
         self.automated_resolver = AutomatedConflictResolver(self.console)
+        self.model_name = "o4-mini"
 
         # Configure OpenAI gateway
         api_key = os.environ.get("OPENAI_API_KEY")
@@ -54,7 +55,7 @@ class WorkbenchRunner:
             sys.exit(1)
 
         openai_gateway = OpenAIGateway(api_key=api_key)
-        self.llm_gateway = LLMGateway(model="gpt-4o-mini", gateway=openai_gateway)
+        self.llm_gateway = LLMGateway(model=self.model_name, gateway=openai_gateway)
 
         # Available scenarios
         self.scenarios = {
@@ -178,7 +179,7 @@ class WorkbenchRunner:
             Dictionary with overall results
         """
         self.console.print("[bold green]🚀 Starting Conflict Detection Workbench[/bold green]")
-        self.console.print(f"Using OpenAI model: gpt-4o-mini")
+        self.console.print(f"Using OpenAI model: {self.model_name}")
 
         overall_results = {
             "total_scenarios": len(self.scenarios),

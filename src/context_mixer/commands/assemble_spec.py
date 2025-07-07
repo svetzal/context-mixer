@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock
 from rich.console import Console
 
 from context_mixer.config import Config
-from context_mixer.commands.assemble import do_assemble, _assemble_for_copilot, _assemble_for_claude
+from context_mixer.commands.assemble import do_assemble
+from context_mixer.commands.assembly_strategies import AssemblyStrategyFactory
 from context_mixer.domain.knowledge import (
     KnowledgeChunk, 
     ChunkMetadata, 
@@ -142,10 +143,9 @@ class DescribeDoAssemble:
         expected_output = tmp_path / "assembled" / "copilot" / "copilot-instructions.md"
         assert expected_output.exists()
 
-        # Verify content format
+        # Verify content format (default compressed format)
         content = expected_output.read_text()
-        assert "# GitHub Copilot Instructions" in content
-        assert "## Project Context" in content
+        assert "# Instructions" in content
 
     def should_handle_missing_vector_store_gracefully(self, mock_console, mock_config):
         result = asyncio.run(do_assemble(
@@ -208,74 +208,112 @@ class DescribeDoAssemble:
         # Verify custom output file was created
         assert custom_output.exists()
         content = custom_output.read_text()
-        assert "# GitHub Copilot Instructions" in content
+        assert "# Instructions" in content  # Default compressed format
 
 
 class DescribeAssembleForCopilot:
     def should_format_content_for_github_copilot(self, sample_chunks):
-        content = _assemble_for_copilot(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        strategy = AssemblyStrategyFactory.create_strategy("copilot")
 
-        assert "# GitHub Copilot Instructions" in content
-        assert "## Project Context" in content
-        assert "🔒 OFFICIAL" in content  # Authority indicator for official chunks
-        assert "📋 CONVENTIONAL" in content   # Authority indicator for conventional chunks
-        assert "🧪 EXPERIMENTAL" in content # Authority indicator for experimental chunks
+        # Test default (compressed) format
+        content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        assert "# Instructions" in content
+        assert "🔒 OFFICIAL" not in content  # No authority indicators in compressed mode
+
+        # Test verbose format
+        verbose_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8, verbose=True)
+        assert "# GitHub Copilot Instructions" in verbose_content
+        assert "## Project Context" in verbose_content
+        assert "🔒 OFFICIAL" in verbose_content  # Authority indicator for official chunks
+        assert "📋 CONVENTIONAL" in verbose_content   # Authority indicator for conventional chunks
+        assert "🧪 EXPERIMENTAL" in verbose_content # Authority indicator for experimental chunks
 
     def should_group_chunks_by_domain(self, sample_chunks):
-        content = _assemble_for_copilot(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        strategy = AssemblyStrategyFactory.create_strategy("copilot")
 
-        # Should have domain-based sections
-        assert "Python Guidelines" in content or "Coding Guidelines" in content
-        assert "Testing Guidelines" in content
-        assert "Documentation Guidelines" in content
+        # Test default (compressed) format - no domain headers due to optimization
+        content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        # Content should still contain the chunk content even without domain headers
+        assert "# Instructions" in content
+        assert len(content) > 50  # Should have meaningful content
+
+        # Test verbose format - full headers
+        verbose_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8, verbose=True)
+        assert "Python Guidelines" in verbose_content or "Coding Guidelines" in verbose_content
+        assert "Testing Guidelines" in verbose_content
+        assert "Documentation Guidelines" in verbose_content
 
     def should_respect_token_budget(self, sample_chunks):
-        # Test that function works with different token budgets
-        content_small = _assemble_for_copilot(sample_chunks, token_budget=100, quality_threshold=0.8)
-        content_large = _assemble_for_copilot(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        strategy = AssemblyStrategyFactory.create_strategy("copilot")
 
-        # Both should produce valid content with headers
-        assert "# GitHub Copilot Instructions" in content_small
-        assert "# GitHub Copilot Instructions" in content_large
-        assert "## Project Context" in content_small
-        assert "## Project Context" in content_large
+        # Test that function works with different token budgets (default compressed format)
+        content_small = strategy.assemble(sample_chunks, token_budget=100, quality_threshold=0.8)
+        content_large = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8)
+
+        # Both should produce valid content with compressed headers
+        assert "# Instructions" in content_small
+        assert "# Instructions" in content_large
 
         # Both should be reasonable lengths
         assert len(content_small) > 50  # Not empty
         assert len(content_large) > 50  # Not empty
 
-    def should_include_craft_system_attribution(self, sample_chunks):
-        content = _assemble_for_copilot(sample_chunks, token_budget=2000, quality_threshold=0.8)
+    def should_include_craft_system_attribution_in_verbose_mode(self, sample_chunks):
+        strategy = AssemblyStrategyFactory.create_strategy("copilot")
 
-        assert "Generated by Context Mixer CRAFT system" in content
-        assert f"{len(sample_chunks)} chunks processed" in content
+        # Test verbose mode includes attribution
+        verbose_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8, verbose=True)
+        assert "Generated by Context Mixer CRAFT system" in verbose_content
+        assert f"{len(sample_chunks)} chunks processed" in verbose_content
+
+        # Test default (compressed) mode excludes attribution
+        compressed_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        assert "Generated by Context Mixer CRAFT system" not in compressed_content
 
 
 class DescribeAssembleForClaude:
     def should_format_content_for_claude(self, sample_chunks):
-        content = _assemble_for_claude(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        strategy = AssemblyStrategyFactory.create_strategy("claude")
 
-        assert "# Claude Context Instructions" in content
-        assert "You are an AI assistant with the following project context:" in content
-        assert "**Authority Level:**" in content
-        assert "**Domains:**" in content
+        # Test default (compressed) format
+        content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        assert "# Context" in content
+        assert "**Authority Level:**" not in content  # No metadata in compressed mode
+        assert "**Domains:**" not in content
 
-    def should_include_chunk_metadata(self, sample_chunks):
-        content = _assemble_for_claude(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        # Test verbose format
+        verbose_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8, verbose=True)
+        assert "# Claude Context Instructions" in verbose_content
+        assert "You are an AI assistant with the following project context:" in verbose_content
+        assert "**Authority Level:**" in verbose_content
+        assert "**Domains:**" in verbose_content
 
-        # Should include authority levels
-        assert "Official" in content
-        assert "Conventional" in content
-        assert "Experimental" in content
+    def should_include_chunk_metadata_in_verbose_mode(self, sample_chunks):
+        strategy = AssemblyStrategyFactory.create_strategy("claude")
 
-        # Should include domains
-        assert "python" in content
-        assert "testing" in content
-        assert "documentation" in content
+        # Test that metadata is only included in verbose mode
+        verbose_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8, verbose=True)
+
+        # Should include authority levels in verbose mode
+        assert "Official" in verbose_content
+        assert "Conventional" in verbose_content
+        assert "Experimental" in verbose_content
+
+        # Should include domains in verbose mode
+        assert "python" in verbose_content
+        assert "testing" in verbose_content
+        assert "documentation" in verbose_content
+
+        # Test that metadata is not included in default (compressed) mode
+        compressed_content = strategy.assemble(sample_chunks, token_budget=2000, quality_threshold=0.8)
+        assert "**Authority Level:**" not in compressed_content
+        assert "**Domains:**" not in compressed_content
 
     def should_respect_token_budget_for_claude(self, sample_chunks):
+        strategy = AssemblyStrategyFactory.create_strategy("claude")
+
         # Use small token budget
-        content = _assemble_for_claude(sample_chunks, token_budget=100, quality_threshold=0.8)
+        content = strategy.assemble(sample_chunks, token_budget=100, quality_threshold=0.8)
 
         # Content should be truncated to fit budget
         token_count = len(content.split())

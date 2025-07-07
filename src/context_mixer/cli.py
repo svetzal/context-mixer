@@ -117,6 +117,10 @@ def assemble(
             0.8,
             help="Minimum quality threshold for included chunks"
         ),
+        verbose: bool = typer.Option(
+            False,
+            help="Enable verbose mode to show all metadata and chunk provenance information"
+        ),
 ):
     """
     Assemble context fragments for a specific target.
@@ -141,7 +145,8 @@ def assemble(
         project_id_list,
         exclude_project_list,
         token_budget, 
-        quality_threshold
+        quality_threshold,
+        verbose
     ))
 
 

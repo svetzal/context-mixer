@@ -1,0 +1,3 @@
+- During assembly, tokens are simply counted by using the str split function. While fast, this is not accurate.
+  - We should do proper tokenization to count these things
+  - Perhaps we should be storing these chunks as token lists to make this work easier
