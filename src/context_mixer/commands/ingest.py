@@ -91,6 +91,10 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
         for guidance in conflict.conflicting_guidance:
             conflicting_chunk_contents.add(guidance.content.strip())
 
+    # Remove any conflicting chunks that were already added to chunks_to_store
+    chunks_to_store[:] = [chunk for chunk in chunks_to_store 
+                         if chunk.content.strip() not in conflicting_chunk_contents]
+
     # For each resolved conflict, create a new chunk with the resolved content
     for conflict in resolved_conflicts:
         if hasattr(conflict, 'resolution') and conflict.resolution:

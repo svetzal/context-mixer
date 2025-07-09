@@ -33,7 +33,7 @@ class ScenarioDefinition:
 
 def get_scenario() -> ScenarioDefinition:
     """Get the internal conflict scenario definition."""
-    
+
     internal_conflict_content = """# Coding Standards
 
 ## Style Guide
@@ -64,6 +64,6 @@ def get_scenario() -> ScenarioDefinition:
             "should_contain:80 characters",
             "should_not_contain:100 characters",
             "should_contain:2 spaces for indentation",  # Non-conflicting content should remain
-            "should_contain:camelCase for variable names",
+            "should_contain:camelCase",  # Variable naming convention should remain
         ]
     )

@@ -107,12 +107,14 @@ class AutomatedConflictResolver:
 
         # Check for line length conflicts
         if "line length" in description_lower or "characters" in description_lower:
-            # Look for specific guidance in the conflicting content
-            for guidance in conflict.conflicting_guidance:
-                if "80 characters" in guidance.content:
-                    return "Maximum line length is 80 characters"
-                elif "100 characters" in guidance.content:
-                    return "Maximum line length is 100 characters"
+            # Always prefer 80 characters over 100 characters for consistency
+            has_80_chars = any("80 characters" in guidance.content for guidance in conflict.conflicting_guidance)
+            has_100_chars = any("100 characters" in guidance.content for guidance in conflict.conflicting_guidance)
+
+            if has_80_chars:
+                return "Maximum line length is 80 characters"
+            elif has_100_chars:
+                return "Maximum line length is 100 characters"
             return self.resolution_strategies.get("line_length")
 
         # Check for async/sync conflicts
