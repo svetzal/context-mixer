@@ -24,15 +24,6 @@ class AutomatedConflictResolver:
         """Initialize the automated resolver."""
         self.console = console or Console()
 
-        # Default resolution strategies
-        self.resolution_strategies = {
-            "indentation": "Use 4 spaces for indentation",
-            "line_length": "Maximum line length is 80 characters",
-            "quotes": "Use double quotes",
-            "async": "Use async/await for database operations",
-            "composition": "Prefer composition over inheritance",
-        }
-
     def resolve_conflicts(self, conflicts: List[Conflict]) -> List[Conflict]:
         """
         Automatically resolve conflicts using predefined strategies.
@@ -85,63 +76,27 @@ class AutomatedConflictResolver:
 
     def _determine_resolution(self, conflict: Conflict) -> Optional[str]:
         """
-        Determine the appropriate resolution for a conflict.
+        Determine the appropriate resolution for a conflict using a generalized approach.
+
+        This method uses a simple strategy that prefers existing content over new content.
+        This is a general approach that works for any type of conflict without hardcoded
+        rules for specific conflict types.
 
         Args:
             conflict: The conflict to resolve
 
         Returns:
-            Resolution string or None if no strategy found
+            Resolution string or None if no guidance available
         """
-        description_lower = conflict.description.lower()
-
-        # Check for indentation conflicts
-        if "indentation" in description_lower or "spaces" in description_lower:
-            # Look for specific guidance in the conflicting content
-            for guidance in conflict.conflicting_guidance:
-                if "4 spaces" in guidance.content:
-                    return "Use 4 spaces for indentation"
-                elif "2 spaces" in guidance.content:
-                    return "Use 2 spaces for indentation"
-            return self.resolution_strategies.get("indentation")
-
-        # Check for line length conflicts
-        if "line length" in description_lower or "characters" in description_lower:
-            # Always prefer 80 characters over 100 characters for consistency
-            has_80_chars = any("80 characters" in guidance.content for guidance in conflict.conflicting_guidance)
-            has_100_chars = any("100 characters" in guidance.content for guidance in conflict.conflicting_guidance)
-
-            if has_80_chars:
-                return "Maximum line length is 80 characters"
-            elif has_100_chars:
-                return "Maximum line length is 100 characters"
-            return self.resolution_strategies.get("line_length")
-
-        # Check for async/sync conflicts
-        if "async" in description_lower or "synchronous" in description_lower:
-            return self.resolution_strategies.get("async")
-
-        # Check for composition/inheritance conflicts
-        if "composition" in description_lower or "inheritance" in description_lower:
-            return self.resolution_strategies.get("composition")
-
-        # Check for quote style conflicts
-        if "quote" in description_lower:
-            return self.resolution_strategies.get("quotes")
-
-        # If no specific strategy found, try to extract a reasonable resolution
-        # from the first piece of conflicting guidance
+        # Prefer existing content over new content
+        # This is a simple, general strategy that works for any conflict type
         if conflict.conflicting_guidance:
+            # Look for existing content first
+            for guidance in conflict.conflicting_guidance:
+                if guidance.source == "existing":
+                    return guidance.content.strip()
+
+            # If no existing content found, use the first guidance
             return conflict.conflicting_guidance[0].content.strip()
 
         return None
-
-    def add_resolution_strategy(self, key: str, resolution: str):
-        """
-        Add a new resolution strategy.
-
-        Args:
-            key: Strategy key (used for matching)
-            resolution: Resolution text to use
-        """
-        self.resolution_strategies[key] = resolution

@@ -31,15 +31,17 @@ class VectorKnowledgeStore(KnowledgeStore):
     by the KnowledgeStore abstract class.
     """
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, llm_gateway=None):
         """
         Initialize the vector knowledge store.
 
         Args:
             db_path: Path to the ChromaDB database directory
+            llm_gateway: Optional LLM gateway for conflict detection
         """
         self.db_path = db_path
         self._gateway: Optional[ChromaGateway] = None
+        self._llm_gateway = llm_gateway
 
     def _get_gateway(self) -> ChromaGateway:
         """Get or create the ChromaDB gateway instance."""
@@ -234,10 +236,11 @@ class VectorKnowledgeStore(KnowledgeStore):
 
     async def detect_conflicts(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
         """
-        Detect potential conflicts with existing knowledge using LLM-based analysis.
+        Detect potential conflicts with existing knowledge using comprehensive analysis.
 
-        This implementation uses semantic similarity to find related chunks, then
-        uses LLM analysis to determine if they actually conflict.
+        This implementation checks all chunks in the same domains, not just semantically
+        similar ones, to ensure we catch conflicts that might use different wording
+        but address the same topics.
 
         Args:
             chunk: KnowledgeChunk to check for conflicts
@@ -249,25 +252,33 @@ class VectorKnowledgeStore(KnowledgeStore):
             StorageError: If conflict detection fails
         """
         try:
-            # Search for semantically similar chunks
-            query = SearchQuery(
-                text=chunk.content,
-                max_results=20,
-                min_relevance_score=0.5  # Moderate threshold to catch potential conflicts
-            )
-            results = await self.search(query)
-
             conflicts = []
-            for result in results.results:
-                candidate = result.chunk
 
-                # Skip the chunk itself
-                if candidate.id == chunk.id:
-                    continue
+            # Get all chunks in the same domains as the input chunk
+            # This ensures we check for conflicts across all related content,
+            # not just semantically similar content
+            for domain in chunk.metadata.domains:
+                domain_query = SearchQuery(
+                    text="*",  # Match all content
+                    domains=[domain],
+                    max_results=100  # Get more results to be comprehensive
+                )
+                domain_results = await self.search(domain_query)
 
-                # Use LLM-based conflict detection for accurate analysis
-                if await self._llm_detect_conflict(chunk, candidate):
-                    conflicts.append(candidate)
+                for result in domain_results.results:
+                    candidate = result.chunk
+
+                    # Skip the chunk itself
+                    if candidate.id == chunk.id:
+                        continue
+
+                    # Skip if we've already checked this candidate
+                    if candidate in conflicts:
+                        continue
+
+                    # Use LLM-based conflict detection for accurate analysis
+                    if await self._llm_detect_conflict(chunk, candidate):
+                        conflicts.append(candidate)
 
             return conflicts
         except Exception as e:
@@ -375,16 +386,19 @@ class VectorKnowledgeStore(KnowledgeStore):
             if chunk1.id in chunk2.metadata.conflicts or chunk2.id in chunk1.metadata.conflicts:
                 return True
 
-            # Use LLM to detect semantic conflicts
-            from context_mixer.commands.operations.merge import detect_conflicts
-            from context_mixer.gateways.llm import LLMGateway
+            # Use LLM to detect semantic conflicts if gateway is available
+            if self._llm_gateway:
+                from context_mixer.commands.operations.merge import detect_conflicts
+                conflicts = detect_conflicts(chunk1.content, chunk2.content, self._llm_gateway)
+                return len(conflicts.list) > 0
 
-            # Create LLM gateway for conflict detection
-            # This could be optimized by passing it in the constructor
-            llm_gateway = LLMGateway()
+            # If no LLM gateway available, fall back to basic checks
+            # Check for temporal conflicts
+            if (chunk1.metadata.temporal == TemporalScope.CURRENT and 
+                chunk2.metadata.temporal == TemporalScope.DEPRECATED):
+                return True
 
-            conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
-            return len(conflicts.list) > 0
+            return False
 
         except Exception:
             # If LLM detection fails, fall back to basic checks

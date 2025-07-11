@@ -96,7 +96,7 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
                          if chunk.content.strip() not in conflicting_chunk_contents]
 
     # For each resolved conflict, create a new chunk with the resolved content
-    for conflict in resolved_conflicts:
+    for i, conflict in enumerate(resolved_conflicts):
         if hasattr(conflict, 'resolution') and conflict.resolution:
             # Find one of the original conflicting chunks to use as a template
             template_chunk = None
@@ -108,8 +108,9 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
             if template_chunk:
                 # Create a new chunk with the resolved content
                 # Use the template chunk's metadata but update the content
+                # Make the ID unique by including the conflict index
                 resolved_chunk = KnowledgeChunk(
-                    id=template_chunk.id + "_resolved",
+                    id=f"{template_chunk.id}_resolved_{i}",
                     content=conflict.resolution,
                     metadata=template_chunk.metadata,
                     embedding=None  # Will be generated when stored
@@ -277,7 +278,7 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
                 # Store chunks in vector knowledge store
                 vector_store_path = config.library_path / "vector_store"
-                knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path)
+                knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
 
                 # Check for conflicts before storing chunks
                 all_conflicts = []

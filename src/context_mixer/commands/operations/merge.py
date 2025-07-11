@@ -46,9 +46,9 @@ def detect_conflicts(existing_content: str,
         3. Following both pieces of guidance would be impossible or inconsistent
 
         Examples of REAL conflicts:
-        - "Use 4 spaces for indentation" vs "Use 2 spaces for indentation"
-        - "Always use async/await" vs "Use synchronous calls for better performance"
-        - "Maximum line length 80 characters" vs "Maximum line length 120 characters"
+        - Different formatting rules for the same code element
+        - Contradictory performance recommendations for the same operation
+        - Mutually exclusive architectural patterns for the same component
 
         Examples of NOT conflicts (complementary information):
         - A header/title and its content details

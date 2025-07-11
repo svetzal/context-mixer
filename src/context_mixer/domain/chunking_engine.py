@@ -480,7 +480,7 @@ Output complete chunks directly - do not emit metadata about character positions
             messages = [
                 LLMMessage(
                     role=MessageRole.System,
-                    content="""You evaluate text for usefulness. Accept almost all content as complete and useful.
+                    content="""You evaluate text for usefulness. Be extremely lenient and accept virtually all content as complete and useful.
 
 ACCEPT these as complete and useful:
 - Any instruction, even if brief or partial
@@ -489,13 +489,18 @@ ACCEPT these as complete and useful:
 - Any principle or concept definition
 - Any requirement or prerequisite
 - Any troubleshooting tip
+- Headers, titles, or section names (even without detailed content)
+- Brief statements or rules
+- Partial lists or incomplete sentences that convey meaning
+- Any text that provides guidance or information, however minimal
 
 ONLY mark as incomplete if the text is:
 - Completely garbled or corrupted
 - Random meaningless characters
 - Empty or only whitespace
-- Cut off at the beginning or end of a sentence
+- Clearly cut off mid-word (not mid-sentence)
 
+Be very generous in your evaluation. If there's any doubt, mark it as complete.
 Provide your analysis as a structured response."""
                 ),
                 LLMMessage(
@@ -505,6 +510,20 @@ Provide your analysis as a structured response."""
             ]
 
             result = self.llm_gateway.generate_object(messages, ValidationResult)
+
+            # Override LLM decision only if it's being too strict with low confidence
+            # If the chunk has meaningful content and LLM has low confidence, accept it
+            if not result.is_complete and len(chunk.content.strip()) > 5 and result.confidence < 0.7:
+                # Check if content has meaningful words
+                words = chunk.content.strip().split()
+                if len(words) >= 2:  # At least 2 words suggests meaningful content
+                    return ValidationResult(
+                        is_complete=True,
+                        reason="Overriding LLM decision - content appears meaningful despite low-confidence LLM assessment",
+                        confidence=0.8,
+                        issues=[]
+                    )
+
             return result
 
         except Exception as e:

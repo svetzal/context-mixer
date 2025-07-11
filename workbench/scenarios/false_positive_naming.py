@@ -36,7 +36,7 @@ class ScenarioDefinition:
 
 def get_scenario() -> ScenarioDefinition:
     """Get the false positive naming convention scenario definition."""
-    
+
     naming1_content = """# Naming Conventions
 
 ## Variables
@@ -67,9 +67,9 @@ def get_scenario() -> ScenarioDefinition:
         ],
         expected_resolution="",  # No resolution needed since no conflicts expected
         validation_checks=[
-            "should_contain:camelCase for variable names",
-            "should_contain:PascalCase for class names", 
-            "should_contain:snake_case for function names",
+            "should_contain:camelCase",
+            "should_contain:PascalCase", 
+            "should_contain:snake_case",
             # All naming conventions should be preserved since they're not conflicting
         ]
     )

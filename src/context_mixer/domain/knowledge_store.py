@@ -234,18 +234,19 @@ class KnowledgeStoreFactory:
     """
 
     @staticmethod
-    def create_vector_store(db_path: Path) -> "VectorKnowledgeStore":
+    def create_vector_store(db_path: Path, llm_gateway=None) -> "VectorKnowledgeStore":
         """
         Create a vector-based knowledge store using ChromaDB.
 
         Args:
             db_path: Path to the database directory
+            llm_gateway: Optional LLM gateway for conflict detection
 
         Returns:
             VectorKnowledgeStore instance
         """
         from .vector_knowledge_store import VectorKnowledgeStore
-        return VectorKnowledgeStore(db_path)
+        return VectorKnowledgeStore(db_path, llm_gateway)
 
     @staticmethod
     def create_file_store(storage_path: Path) -> "FileKnowledgeStore":
