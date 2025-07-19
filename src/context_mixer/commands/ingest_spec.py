@@ -8,6 +8,7 @@ from pathlib import Path
 from rich.panel import Panel
 
 from context_mixer.commands.ingest import do_ingest, IngestCommand, apply_conflict_resolutions
+from context_mixer.commands.base import CommandContext, CommandResult
 from context_mixer.commands.operations.merge import detect_conflicts
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
 from context_mixer.commands.operations.commit import CommitOperation
@@ -97,14 +98,23 @@ class DescribeIngestCommand:
 
     async def should_execute_with_injected_knowledge_store(self, ingest_command, mock_console, mock_config, mock_llm_gateway, mock_path, mock_knowledge_store):
         """Test that IngestCommand uses the injected knowledge store."""
-        await ingest_command.execute(
+        # Create CommandContext with the required parameters
+        context = CommandContext(
             console=mock_console,
             config=mock_config,
             llm_gateway=mock_llm_gateway,
-            path=mock_path,
-            commit=False,
-            detect_boundaries=False
+            parameters={
+                'path': mock_path,
+                'commit': False,
+                'detect_boundaries': False
+            }
         )
+
+        result = await ingest_command.execute(context)
+
+        # Verify that the command executed successfully
+        assert isinstance(result, CommandResult)
+        assert result.success is True
 
         # Verify that the injected knowledge store was used
         assert ingest_command.knowledge_store is mock_knowledge_store

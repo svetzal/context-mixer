@@ -14,6 +14,66 @@ from mojentic.llm import LLMMessage, MessageRole
 from context_mixer.config import Config, DEFAULT_ROOT_CONTEXT_FILENAME
 from context_mixer.gateways.llm import LLMGateway
 from context_mixer.domain.llm_instructions import system_message, clean_prompt
+from .base import Command, CommandContext, CommandResult
+
+
+class SliceCommand(Command):
+    """
+    Command for slicing context files into categories.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the slice command with the given context.
+
+        Args:
+            context: CommandContext containing console, config, llm_gateway, and parameters
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Extract parameters from context
+            output_path = context.parameters.get('output_path')
+            granularity = context.parameters.get('granularity', 'basic')
+            domains = context.parameters.get('domains')
+            project_ids = context.parameters.get('project_ids')
+            exclude_projects = context.parameters.get('exclude_projects')
+            authority_level = context.parameters.get('authority_level')
+
+            # Call the existing implementation for backward compatibility
+            do_slice(
+                console=context.console,
+                config=context.config,
+                llm_gateway=context.llm_gateway,
+                output_path=output_path,
+                granularity=granularity,
+                domains=domains,
+                project_ids=project_ids,
+                exclude_projects=exclude_projects,
+                authority_level=authority_level
+            )
+
+            return CommandResult(
+                success=True,
+                message="Context sliced successfully",
+                data={
+                    'output_path': str(output_path) if output_path else None,
+                    'granularity': granularity,
+                    'domains': domains,
+                    'project_ids': project_ids,
+                    'exclude_projects': exclude_projects,
+                    'authority_level': authority_level
+                }
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to slice context: {str(e)}",
+                error=e
+            )
 
 
 def do_slice(

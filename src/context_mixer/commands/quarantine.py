@@ -23,9 +23,234 @@ from context_mixer.domain.knowledge_quarantine import (
     Resolution
 )
 from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
+from .base import Command, CommandContext, CommandResult
 
 
-def do_quarantine_list(console: Console, 
+class QuarantineListCommand(Command):
+    """
+    Command for listing quarantined chunks.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the quarantine list command with the given context.
+
+        Args:
+            context: CommandContext containing console, config, and parameters
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Extract parameters from context
+            reason_filter = context.parameters.get('reason_filter')
+            resolved_filter = context.parameters.get('resolved_filter')
+            priority_filter = context.parameters.get('priority_filter')
+            project_filter = context.parameters.get('project_filter')
+
+            # Call the existing implementation for backward compatibility
+            do_quarantine_list(
+                console=context.console,
+                config=context.config,
+                reason_filter=reason_filter,
+                resolved_filter=resolved_filter,
+                priority_filter=priority_filter,
+                project_filter=project_filter
+            )
+
+            return CommandResult(
+                success=True,
+                message="Quarantine list displayed successfully"
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to list quarantined chunks: {str(e)}",
+                error=e
+            )
+
+
+class QuarantineReviewCommand(Command):
+    """
+    Command for reviewing a specific quarantined chunk.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the quarantine review command with the given context.
+
+        Args:
+            context: CommandContext containing console, config, and parameters
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Extract parameters from context
+            chunk_id = context.parameters.get('chunk_id')
+
+            if not chunk_id:
+                return CommandResult(
+                    success=False,
+                    message="chunk_id parameter is required"
+                )
+
+            # Call the existing implementation for backward compatibility
+            do_quarantine_review(
+                console=context.console,
+                config=context.config,
+                chunk_id=chunk_id
+            )
+
+            return CommandResult(
+                success=True,
+                message="Quarantine review completed successfully",
+                data={'chunk_id': chunk_id}
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to review quarantined chunk: {str(e)}",
+                error=e
+            )
+
+
+class QuarantineResolveCommand(Command):
+    """
+    Command for resolving a quarantined chunk.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the quarantine resolve command with the given context.
+
+        Args:
+            context: CommandContext containing console, config, and parameters
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Extract parameters from context
+            chunk_id = context.parameters.get('chunk_id')
+            action = context.parameters.get('action')
+            reason = context.parameters.get('reason')
+            resolved_by = context.parameters.get('resolved_by')
+            notes = context.parameters.get('notes')
+
+            if not chunk_id or not action or not reason:
+                return CommandResult(
+                    success=False,
+                    message="chunk_id, action, and reason parameters are required"
+                )
+
+            # Call the existing implementation for backward compatibility
+            do_quarantine_resolve(
+                console=context.console,
+                config=context.config,
+                chunk_id=chunk_id,
+                action=action,
+                reason=reason,
+                resolved_by=resolved_by,
+                notes=notes
+            )
+
+            return CommandResult(
+                success=True,
+                message="Quarantine resolved successfully",
+                data={
+                    'chunk_id': chunk_id,
+                    'action': action,
+                    'reason': reason
+                }
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to resolve quarantined chunk: {str(e)}",
+                error=e
+            )
+
+
+class QuarantineStatsCommand(Command):
+    """
+    Command for displaying quarantine statistics.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the quarantine stats command with the given context.
+
+        Args:
+            context: CommandContext containing console and config
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Call the existing implementation for backward compatibility
+            do_quarantine_stats(
+                console=context.console,
+                config=context.config
+            )
+
+            return CommandResult(
+                success=True,
+                message="Quarantine statistics displayed successfully"
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to display quarantine statistics: {str(e)}",
+                error=e
+            )
+
+
+class QuarantineClearCommand(Command):
+    """
+    Command for clearing resolved quarantined chunks.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the quarantine clear command with the given context.
+
+        Args:
+            context: CommandContext containing console and config
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Call the existing implementation for backward compatibility
+            do_quarantine_clear(
+                console=context.console,
+                config=context.config
+            )
+
+            return CommandResult(
+                success=True,
+                message="Quarantine cleared successfully"
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to clear quarantine: {str(e)}",
+                error=e
+            )
+
+
+def do_quarantine_list(console: Console,
                       config: Config,
                       reason_filter: Optional[str] = None,
                       resolved_filter: Optional[bool] = None,
@@ -33,7 +258,7 @@ def do_quarantine_list(console: Console,
                       project_filter: Optional[str] = None) -> None:
     """
     List quarantined chunks with optional filtering.
-    
+
     Args:
         console: Rich console for output
         config: Application configuration
@@ -45,7 +270,7 @@ def do_quarantine_list(console: Console,
     try:
         # Initialize quarantine system
         quarantine = KnowledgeQuarantine()
-        
+
         # Convert string reason filter to enum if provided
         reason_enum = None
         if reason_filter:
@@ -55,7 +280,7 @@ def do_quarantine_list(console: Console,
                 console.print(f"[red]Invalid reason filter: {reason_filter}[/red]")
                 console.print(f"Valid reasons: {', '.join([r.value for r in QuarantineReason])}")
                 return
-        
+
         # Get filtered quarantined chunks
         quarantined_chunks = quarantine.review_quarantined_chunks(
             reason_filter=reason_enum,
@@ -63,11 +288,11 @@ def do_quarantine_list(console: Console,
             priority_filter=priority_filter,
             project_filter=project_filter
         )
-        
+
         if not quarantined_chunks:
             console.print("[yellow]No quarantined chunks found matching the specified filters.[/yellow]")
             return
-        
+
         # Create table for displaying results
         table = Table(title="Quarantined Knowledge Chunks")
         table.add_column("ID", style="cyan", no_wrap=True)
@@ -77,13 +302,13 @@ def do_quarantine_list(console: Console,
         table.add_column("Age (days)", style="blue", justify="right")
         table.add_column("Status", style="red")
         table.add_column("Description", style="white")
-        
+
         for chunk in quarantined_chunks:
             status = "✓ Resolved" if chunk.is_resolved() else "⚠ Unresolved"
             status_style = "green" if chunk.is_resolved() else "red"
-            
+
             project_name = chunk.chunk.get_project_name() or chunk.chunk.get_project_id() or "N/A"
-            
+
             table.add_row(
                 chunk.id[:8] + "...",  # Truncated ID
                 chunk.reason.value,
@@ -93,14 +318,14 @@ def do_quarantine_list(console: Console,
                 Text(status, style=status_style),
                 chunk.description[:50] + "..." if len(chunk.description) > 50 else chunk.description
             )
-        
+
         console.print(table)
-        
+
         # Show summary statistics
         stats = quarantine.get_quarantine_stats()
         console.print(f"\n[bold]Summary:[/bold] {stats['total_quarantined']} total, "
                      f"{stats['unresolved']} unresolved, {stats['resolved']} resolved")
-        
+
     except Exception as e:
         console.print(f"[red]Error listing quarantined chunks: {str(e)}[/red]")
 
@@ -110,7 +335,7 @@ def do_quarantine_review(console: Console,
                         chunk_id: str) -> None:
     """
     Review a specific quarantined chunk in detail.
-    
+
     Args:
         console: Rich console for output
         config: Application configuration
@@ -119,11 +344,11 @@ def do_quarantine_review(console: Console,
     try:
         quarantine = KnowledgeQuarantine()
         quarantined_chunk = quarantine.get_quarantined_chunk(chunk_id)
-        
+
         if not quarantined_chunk:
             console.print(f"[red]Quarantined chunk with ID '{chunk_id}' not found.[/red]")
             return
-        
+
         # Display detailed information
         panel_content = []
         panel_content.append(f"[bold]Chunk ID:[/bold] {quarantined_chunk.id}")
@@ -131,28 +356,28 @@ def do_quarantine_review(console: Console,
         panel_content.append(f"[bold]Priority:[/bold] {quarantined_chunk.priority}")
         panel_content.append(f"[bold]Quarantined At:[/bold] {quarantined_chunk.quarantined_at}")
         panel_content.append(f"[bold]Age:[/bold] {quarantined_chunk.get_age_days()} days")
-        
+
         if quarantined_chunk.quarantined_by:
             panel_content.append(f"[bold]Quarantined By:[/bold] {quarantined_chunk.quarantined_by}")
-        
+
         if quarantined_chunk.conflicting_chunks:
             panel_content.append(f"[bold]Conflicting Chunks:[/bold] {', '.join(quarantined_chunk.conflicting_chunks)}")
-        
+
         panel_content.append(f"\n[bold]Description:[/bold]\n{quarantined_chunk.description}")
-        
+
         # Show chunk content
         panel_content.append(f"\n[bold]Chunk Content:[/bold]\n{quarantined_chunk.chunk.content}")
-        
+
         # Show project information
         project_info = []
         if quarantined_chunk.chunk.get_project_id():
             project_info.append(f"ID: {quarantined_chunk.chunk.get_project_id()}")
         if quarantined_chunk.chunk.get_project_name():
             project_info.append(f"Name: {quarantined_chunk.chunk.get_project_name()}")
-        
+
         if project_info:
             panel_content.append(f"\n[bold]Project:[/bold] {', '.join(project_info)}")
-        
+
         # Show resolution if resolved
         if quarantined_chunk.is_resolved():
             resolution = quarantined_chunk.resolution
@@ -164,9 +389,9 @@ def do_quarantine_review(console: Console,
                 panel_content.append(f"[bold]Resolved By:[/bold] {resolution.resolved_by}")
             if resolution.notes:
                 panel_content.append(f"[bold]Notes:[/bold] {resolution.notes}")
-        
+
         console.print(Panel("\n".join(panel_content), title="Quarantined Chunk Details", border_style="yellow"))
-        
+
     except Exception as e:
         console.print(f"[red]Error reviewing quarantined chunk: {str(e)}[/red]")
 
@@ -180,7 +405,7 @@ def do_quarantine_resolve(console: Console,
                          notes: Optional[str] = None) -> None:
     """
     Resolve a quarantined chunk with the specified action.
-    
+
     Args:
         console: Rich console for output
         config: Application configuration
@@ -193,15 +418,15 @@ def do_quarantine_resolve(console: Console,
     try:
         quarantine = KnowledgeQuarantine()
         quarantined_chunk = quarantine.get_quarantined_chunk(chunk_id)
-        
+
         if not quarantined_chunk:
             console.print(f"[red]Quarantined chunk with ID '{chunk_id}' not found.[/red]")
             return
-        
+
         if quarantined_chunk.is_resolved():
             console.print(f"[yellow]Chunk '{chunk_id}' is already resolved.[/yellow]")
             return
-        
+
         # Validate action
         try:
             resolution_action = ResolutionAction(action.lower())
@@ -209,7 +434,7 @@ def do_quarantine_resolve(console: Console,
             console.print(f"[red]Invalid action: {action}[/red]")
             console.print(f"Valid actions: {', '.join([a.value for a in ResolutionAction])}")
             return
-        
+
         # Create resolution
         resolution = Resolution(
             action=resolution_action,
@@ -217,13 +442,13 @@ def do_quarantine_resolve(console: Console,
             resolved_by=resolved_by,
             notes=notes
         )
-        
+
         # Apply resolution
         success = quarantine.resolve_quarantine(chunk_id, resolution)
-        
+
         if success:
             console.print(f"[green]Successfully resolved quarantined chunk '{chunk_id}' with action '{action}'.[/green]")
-            
+
             # Show what happens next based on action
             if resolution_action == ResolutionAction.ACCEPT:
                 console.print("[blue]The chunk will be accepted and added to the knowledge store.[/blue]")
@@ -237,7 +462,7 @@ def do_quarantine_resolve(console: Console,
                 console.print("[blue]The issue has been escalated to higher authority.[/blue]")
         else:
             console.print(f"[red]Failed to resolve quarantined chunk '{chunk_id}'.[/red]")
-        
+
     except Exception as e:
         console.print(f"[red]Error resolving quarantined chunk: {str(e)}[/red]")
 
@@ -245,7 +470,7 @@ def do_quarantine_resolve(console: Console,
 def do_quarantine_stats(console: Console, config: Config) -> None:
     """
     Display quarantine system statistics.
-    
+
     Args:
         console: Rich console for output
         config: Application configuration
@@ -253,49 +478,49 @@ def do_quarantine_stats(console: Console, config: Config) -> None:
     try:
         quarantine = KnowledgeQuarantine()
         stats = quarantine.get_quarantine_stats()
-        
+
         # Create statistics table
         table = Table(title="Quarantine System Statistics")
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="yellow", justify="right")
-        
+
         table.add_row("Total Quarantined", str(stats["total_quarantined"]))
         table.add_row("Unresolved", str(stats["unresolved"]))
         table.add_row("Resolved", str(stats["resolved"]))
         table.add_row("Average Age (days)", str(stats["average_age_days"]))
         table.add_row("Oldest Quarantine (days)", str(stats["oldest_quarantine_days"]))
-        
+
         console.print(table)
-        
+
         # Show breakdown by reason
         if stats["reason_breakdown"]:
             console.print("\n[bold]Breakdown by Reason:[/bold]")
             reason_table = Table()
             reason_table.add_column("Reason", style="magenta")
             reason_table.add_column("Count", style="yellow", justify="right")
-            
+
             for reason, count in stats["reason_breakdown"].items():
                 reason_table.add_row(reason.replace("_", " ").title(), str(count))
-            
+
             console.print(reason_table)
-        
+
         # Show breakdown by priority (unresolved only)
         if stats["priority_breakdown"]:
             console.print("\n[bold]Unresolved by Priority:[/bold]")
             priority_table = Table()
             priority_table.add_column("Priority", style="blue")
             priority_table.add_column("Count", style="yellow", justify="right")
-            
+
             for priority, count in sorted(stats["priority_breakdown"].items()):
                 priority_table.add_row(str(priority), str(count))
-            
+
             console.print(priority_table)
-        
+
         # Show high priority items
         high_priority = quarantine.get_high_priority_unresolved()
         if high_priority:
             console.print(f"\n[bold red]⚠ {len(high_priority)} high-priority unresolved items require attention![/bold red]")
-        
+
     except Exception as e:
         console.print(f"[red]Error getting quarantine statistics: {str(e)}[/red]")
 
@@ -303,7 +528,7 @@ def do_quarantine_stats(console: Console, config: Config) -> None:
 def do_quarantine_clear(console: Console, config: Config) -> None:
     """
     Clear all resolved quarantined chunks from the system.
-    
+
     Args:
         console: Rich console for output
         config: Application configuration
@@ -311,18 +536,18 @@ def do_quarantine_clear(console: Console, config: Config) -> None:
     try:
         quarantine = KnowledgeQuarantine()
         stats = quarantine.get_quarantine_stats()
-        
+
         if stats["resolved"] == 0:
             console.print("[yellow]No resolved quarantined chunks to clear.[/yellow]")
             return
-        
+
         # Confirm before clearing
         if not Confirm.ask(f"Clear {stats['resolved']} resolved quarantined chunks?"):
             console.print("[yellow]Operation cancelled.[/yellow]")
             return
-        
+
         cleared_count = quarantine.clear_resolved_chunks()
         console.print(f"[green]Successfully cleared {cleared_count} resolved quarantined chunks.[/green]")
-        
+
     except Exception as e:
         console.print(f"[red]Error clearing resolved chunks: {str(e)}[/red]")

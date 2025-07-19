@@ -17,9 +17,10 @@ from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
 from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
+from .base import Command, CommandContext, CommandResult
 
 
-class IngestCommand:
+class IngestCommand(Command):
     """
     Command for ingesting content into the knowledge store.
 
@@ -36,35 +37,54 @@ class IngestCommand:
         """
         self.knowledge_store = knowledge_store
 
-    async def execute(self, console, config: Config, llm_gateway: LLMGateway, path: Path = None, 
-                     project_id: str = None, project_name: str = None, commit: bool = True, 
-                     detect_boundaries: bool = True, resolver: ConflictResolver = None):
+    async def execute(self, context: CommandContext) -> CommandResult:
         """
-        Execute the ingest command with injected dependencies.
+        Execute the ingest command with the given context.
 
         Args:
-            console: Rich console for output
-            config: Configuration object
-            llm_gateway: LLM gateway for processing
-            path: Path to ingest
-            project_id: Project identifier
-            project_name: Project name
-            commit: Whether to commit changes
-            detect_boundaries: Whether to detect boundaries
-            resolver: Conflict resolver
+            context: CommandContext containing all necessary dependencies and parameters
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
         """
-        return await do_ingest(
-            console=console,
-            config=config, 
-            llm_gateway=llm_gateway,
-            path=path,
-            project_id=project_id,
-            project_name=project_name,
-            commit=commit,
-            detect_boundaries=detect_boundaries,
-            resolver=resolver,
-            knowledge_store=self.knowledge_store
-        )
+        try:
+            # Extract parameters from context
+            path = context.parameters.get('path')
+            project_id = context.parameters.get('project_id')
+            project_name = context.parameters.get('project_name')
+            commit = context.parameters.get('commit', True)
+            detect_boundaries = context.parameters.get('detect_boundaries', True)
+            resolver = context.parameters.get('resolver')
+
+            # Call the existing implementation for backward compatibility
+            await do_ingest(
+                console=context.console,
+                config=context.config,
+                llm_gateway=context.llm_gateway,
+                path=path,
+                project_id=project_id,
+                project_name=project_name,
+                commit=commit,
+                detect_boundaries=detect_boundaries,
+                resolver=resolver,
+                knowledge_store=self.knowledge_store
+            )
+
+            return CommandResult(
+                success=True,
+                message="Content ingested successfully",
+                data={
+                    'path': str(path) if path else None,
+                    'project_id': project_id,
+                    'project_name': project_name
+                }
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to ingest content: {str(e)}",
+                error=e
+            )
 
 
 async def _read_files_parallel(file_paths: list[Path], input_path: Path, console) -> list[tuple[Path, str]]:

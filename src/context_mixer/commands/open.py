@@ -10,6 +10,44 @@ from pathlib import Path
 
 from rich.panel import Panel
 
+from .base import Command, CommandContext, CommandResult
+
+
+class OpenCommand(Command):
+    """
+    Command for opening the prompt library in the default editor.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the open command with the given context.
+
+        Args:
+            context: CommandContext containing console and config
+
+        Returns:
+            CommandResult indicating success/failure
+        """
+        try:
+            # Call the existing implementation for backward compatibility
+            do_open(
+                console=context.console,
+                config=context.config
+            )
+
+            return CommandResult(
+                success=True,
+                message="Library opened successfully"
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to open library: {str(e)}",
+                error=e
+            )
+
 
 def do_open(console, config):
     """

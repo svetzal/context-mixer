@@ -1,6 +1,53 @@
 from pathlib import Path
 from rich.panel import Panel
 
+from .base import Command, CommandContext, CommandResult
+
+
+class InitCommand(Command):
+    """
+    Command for initializing a new prompt library.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the init command with the given context.
+
+        Args:
+            context: CommandContext containing console, config, and parameters
+
+        Returns:
+            CommandResult indicating success/failure
+        """
+        try:
+            # Extract parameters from context
+            remote = context.parameters.get('remote')
+            provider = context.parameters.get('provider')
+            model = context.parameters.get('model')
+
+            # Call the existing implementation for backward compatibility
+            do_init(
+                console=context.console,
+                config=context.config,
+                remote=remote,
+                provider=provider,
+                model=model,
+                git_gateway=context.git_gateway
+            )
+
+            return CommandResult(
+                success=True,
+                message="Library initialized successfully"
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to initialize library: {str(e)}",
+                error=e
+            )
+
 
 def do_init(console, config, remote=None, provider=None, model=None, git_gateway=None):
     """

@@ -22,6 +22,69 @@ from context_mixer.domain.knowledge import (
     TemporalScope
 )
 from context_mixer.commands.assembly_strategies import AssemblyStrategyFactory
+from .base import Command, CommandContext, CommandResult
+
+
+class AssembleCommand(Command):
+    """
+    Command for assembling context fragments for specific AI assistants.
+
+    Implements the Command pattern as specified in the architectural improvements backlog.
+    """
+
+    async def execute(self, context: CommandContext) -> CommandResult:
+        """
+        Execute the assemble command with the given context.
+
+        Args:
+            context: CommandContext containing console, config, and parameters
+
+        Returns:
+            CommandResult indicating success/failure and any relevant data
+        """
+        try:
+            # Extract parameters from context
+            target = context.parameters.get('target')
+            output = context.parameters.get('output')
+            profile = context.parameters.get('profile')
+            filter_tags = context.parameters.get('filter_tags')
+            project_ids = context.parameters.get('project_ids')
+            exclude_projects = context.parameters.get('exclude_projects')
+            token_budget = context.parameters.get('token_budget', 8192)
+            quality_threshold = context.parameters.get('quality_threshold', 0.8)
+            verbose = context.parameters.get('verbose', False)
+
+            # Call the existing implementation for backward compatibility
+            await do_assemble(
+                console=context.console,
+                config=context.config,
+                target=target,
+                output=output,
+                profile=profile,
+                filter_tags=filter_tags,
+                project_ids=project_ids,
+                exclude_projects=exclude_projects,
+                token_budget=token_budget,
+                quality_threshold=quality_threshold,
+                verbose=verbose
+            )
+
+            return CommandResult(
+                success=True,
+                message="Context assembled successfully",
+                data={
+                    'target': target,
+                    'output': str(output) if output else None,
+                    'token_budget': token_budget,
+                    'quality_threshold': quality_threshold
+                }
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                message=f"Failed to assemble context: {str(e)}",
+                error=e
+            )
 
 
 async def do_assemble(
