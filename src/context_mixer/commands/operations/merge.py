@@ -8,66 +8,35 @@ from context_mixer.commands.interactions.resolve_conflicts import resolve_confli
 from context_mixer.domain.conflict import ConflictList
 from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
 from context_mixer.domain.knowledge import KnowledgeChunk
+from context_mixer.domain.context_aware_prompts import ContextAwarePromptBuilder
 from context_mixer.gateways.llm import LLMGateway
 
 
 def detect_conflicts(existing_content: str,
                      new_content: str,
-                     llm_gateway: LLMGateway) -> ConflictList:
+                     llm_gateway: LLMGateway,
+                     prompt_builder: ContextAwarePromptBuilder = None) -> ConflictList:
     """
-    Detect conflicts between existing content and new content.
+    Detect conflicts between existing content and new content using context-aware analysis.
 
-    This function uses the LLM to detect conflicts between the existing content and new content.
-    If a conflict is detected, it returns a Conflict object. Otherwise, it returns None.
+    This function uses the LLM to detect conflicts between the existing content and new content,
+    with enhanced contextual awareness to reduce false positives.
 
     Args:
         existing_content: The existing content in context.md
         new_content: The new content to merge
         llm_gateway: The LLM gateway to use for detecting conflicts
+        prompt_builder: Optional context-aware prompt builder (creates default if None)
 
     Returns:
-        A Conflict object if a conflict is detected, None otherwise
+        A ConflictList object containing any detected conflicts
     """
-    # Create a prompt for the LLM to detect conflicts
-    prompt = clean_prompt(f"""
-        Your task is to carefully analyze these two documents and identify ONLY genuine conflicts
-        where they provide contradictory guidance on the same specific topic.
+    # Create context-aware prompt builder if not provided
+    if prompt_builder is None:
+        prompt_builder = ContextAwarePromptBuilder()
 
-        Existing
-        ```
-        {existing_content}
-        ```
-
-        Incoming
-        ```
-        {new_content}
-        ```
-
-        A CONFLICT exists ONLY when:
-        1. Both documents address the SAME specific topic or rule
-        2. They provide CONTRADICTORY or MUTUALLY EXCLUSIVE guidance
-        3. Following both pieces of guidance would be impossible or inconsistent
-
-        Examples of REAL conflicts:
-        - Different formatting rules for the same code element
-        - Contradictory performance recommendations for the same operation
-        - Mutually exclusive architectural patterns for the same component
-
-        Examples of NOT conflicts (complementary information):
-        - A header/title and its content details
-        - General guidance and specific implementation details
-        - Different rules for different contexts (e.g., "camelCase for variables" AND "PascalCase for classes" - these are DIFFERENT contexts)
-        - Different naming conventions for different code elements (variables, classes, functions, etc.)
-        - One document being more detailed than another on the same topic
-        - Multiple related but distinct rules that can all be followed simultaneously
-
-        IMPORTANT: If the documents are complementary (one provides headers/structure, 
-        the other provides details), or if they address different aspects of the same 
-        domain, this is NOT a conflict.
-
-        Only create conflict entries for genuine contradictions where both documents 
-        give opposing instructions for the exact same thing.
-    """)
+    # Build context-aware prompt
+    prompt = clean_prompt(prompt_builder.build_conflict_detection_prompt(existing_content, new_content))
 
     messages = [
         ingest_system_message,

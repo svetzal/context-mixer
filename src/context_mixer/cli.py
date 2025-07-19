@@ -33,6 +33,7 @@ from context_mixer.commands.quarantine import (
     do_quarantine_stats,
     do_quarantine_clear
 )
+from context_mixer.commands.base import CommandContext
 from context_mixer.config import Config
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
@@ -251,7 +252,21 @@ def ingest(
 
     # Create and execute the ingest command with injected dependencies
     ingest_command = IngestCommand(knowledge_store)
-    asyncio.run(ingest_command.execute(console, config, llm_gateway, path, project_id, project_name))
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        llm_gateway=llm_gateway,
+        knowledge_store=knowledge_store,
+        parameters={
+            'path': path,
+            'project_id': project_id,
+            'project_name': project_name
+        }
+    )
+
+    asyncio.run(ingest_command.execute(context))
 
 
 @app.command()

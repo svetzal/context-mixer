@@ -5,7 +5,7 @@ Tests for the merge operations.
 import asyncio
 import pytest
 
-from context_mixer.commands.operations.merge import format_conflict_resolutions, detect_conflicts_async, detect_conflicts_batch
+from context_mixer.commands.operations.merge import format_conflict_resolutions, detect_conflicts_async, detect_conflicts_batch, detect_conflicts
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance, ConflictList
 from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, AuthorityLevel, ProvenanceInfo, GranularityLevel, TemporalScope
 from context_mixer.gateways.llm import MockLLMGateway
@@ -367,3 +367,60 @@ class DescribeDetectConflictsBatch:
         assert chunk2.id == "chunk2"
         assert isinstance(conflicts, ConflictList)
         assert len(conflicts.list) == 0  # Should return empty conflict list on error
+
+
+class DescribeDetectConflictsArchitecturalScope:
+    """Test architectural scope awareness in conflict detection."""
+
+    @pytest.fixture
+    def mock_llm_gateway_no_conflicts(self):
+        """Create a mock LLM gateway that returns no conflicts."""
+        return MockLLMGateway(responses={
+            'generate_object': ConflictList(list=[])
+        })
+
+    def should_not_detect_conflicts_between_gateway_and_general_testing_rules(self, mock_llm_gateway_no_conflicts):
+        """
+        Regression test: Gateway-specific testing rules should not conflict with general testing rules.
+
+        This test ensures that the improved prompt correctly identifies that:
+        - "Gateways should not be tested" (component-specific rule)
+        - "Write tests for new functionality" (general rule)
+        are NOT conflicting because they apply to different architectural scopes.
+        """
+        gateway_content = """Use the Gateway pattern to isolate I/O (network, disk, etc.) from business logic.
+
+- Gateways should contain minimal to no logic, simply delegate to the OS or libraries that perform I/O.
+- Gateways should not be tested, to avoid mocking systems you don't own."""
+
+        general_testing_content = """- Follow the existing project structure.
+- Write tests for any new functionality and co-locate them.
+- Document using numpy-style docstrings.
+- Keep code complexity low (max complexity 10).
+- Use type hints for all functions and methods.
+- Use pydantic v2 (not dataclasses) for data objects.
+- Favor list/dict comprehensions over explicit loops.
+- Favor declarative styles over imperative."""
+
+        conflicts = detect_conflicts(gateway_content, general_testing_content, mock_llm_gateway_no_conflicts)
+
+        assert isinstance(conflicts, ConflictList)
+        assert len(conflicts.list) == 0, "Gateway-specific and general testing rules should not be detected as conflicting"
+        assert mock_llm_gateway_no_conflicts.was_called('generate_object')
+
+    def should_not_detect_conflicts_between_component_specific_rules(self, mock_llm_gateway_no_conflicts):
+        """
+        Test that component-specific rules for different components don't conflict.
+        """
+        repository_content = """Repository pattern guidelines:
+- Repositories should encapsulate data access logic
+- Repositories should be tested with integration tests against real databases"""
+
+        service_content = """Service layer guidelines:
+- Services contain business logic
+- Services should be unit tested with mocked dependencies"""
+
+        conflicts = detect_conflicts(repository_content, service_content, mock_llm_gateway_no_conflicts)
+
+        assert isinstance(conflicts, ConflictList)
+        assert len(conflicts.list) == 0, "Component-specific rules for different components should not conflict"

@@ -226,6 +226,44 @@ class ProvenanceInfo(BaseModel):
 - ✓ Build hybrid search combining vector and metadata filtering
 - ✓ Add performance monitoring and optimization - Collection stats implemented
 
+### 2.4 Enhanced Contextual Awareness ✓
+
+**Multi-Context Detection System** ✓
+- ✓ Implement architectural context detection (gateway, service, repository, controller)
+- ✓ Add platform context detection (web, mobile, desktop, server, cloud)
+- ✓ Create environment context detection (development, staging, production)
+- ✓ Build language context detection (Python, JavaScript, Java, etc.)
+- ✓ Implement context-aware conflict detection and resolution
+
+**Advanced Context Features** (Future Enhancements)
+- [ ] Add CLI commands for context specification during ingestion and resolution
+- [ ] Implement interactive context resolution with user override capabilities
+- [ ] Create context persistence and learning from user corrections
+- [ ] Build machine learning for context detection improvement
+- [ ] Add context pattern recognition and suggestions
+- [ ] Implement team-specific context profiles
+- [ ] Create integration with external context sources (project configs, team wikis)
+
+**Context-Aware CLI Commands** (Future)
+```bash
+# Context specification during conflict resolution
+cmx ingest --context "architectural:gateway" --context "environment:production" file.md
+cmx resolve-conflicts --add-context "platform:web" --add-context "team:backend"
+cmx contexts list  # List available context types
+cmx contexts add-type "deployment" "Deployment-specific rules"  # Add custom context type
+```
+
+**Implementation Tasks:**
+- ✓ Create `Context`, `ContextType`, `ContextAnalysis` domain models
+- ✓ Implement `ContextDetector` interface with specific implementations
+- ✓ Build `ContextDetectionEngine` for coordinating multiple detectors
+- ✓ Create `ContextAwarePromptBuilder` for dynamic conflict detection prompts
+- ✓ Implement `ContextAwareResolutionStrategy` for auto-resolution
+- [ ] Add CLI commands for context specification and management
+- [ ] Build interactive context resolution UI
+- [ ] Implement context persistence and learning capabilities
+- [ ] Create machine learning pipeline for context detection improvement
+
 ---
 
 ## PHASE 3: Cross-Domain Synthesis (Months 7-9)

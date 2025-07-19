@@ -214,6 +214,12 @@ from context_mixer.llm import LLMBroker
 from context_mixer.agents import BaseLLMAgent
 ```
 
+## Procedural Guidelines
+
+When realizing we have accumulated some kind of technical debt, an issue with our approach, or a problem we will run into, incorporate the analysis for it into BACKLOG.md.
+
+When realizing we should consider a specific concern or feature in the future, incorporate it into PLAN.md.
+
 ## Release Process
 
 This project follows Semantic Versioning (SemVer): MAJOR.MINOR.PATCH.

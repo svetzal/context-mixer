@@ -35,6 +35,7 @@ from workbench.automated_resolver import AutomatedConflictResolver
 from workbench.scenarios.indentation_conflict import get_scenario as get_indentation_scenario
 from workbench.scenarios.false_positive_naming import get_scenario as get_false_positive_scenario
 from workbench.scenarios.internal_conflict import get_scenario as get_internal_scenario
+from workbench.scenarios.architectural_scope_false_positive import get_scenario as get_architectural_scope_scenario
 
 # Import OpenAI gateway
 from mojentic.llm.gateways import OpenAIGateway
@@ -63,6 +64,7 @@ class WorkbenchRunner:
             "indentation_conflict": get_indentation_scenario,
             "false_positive_naming": get_false_positive_scenario,
             "internal_conflict": get_internal_scenario,
+            "architectural_scope_false_positive": get_architectural_scope_scenario,
         }
 
     async def run_scenario(self, scenario_name: str) -> Dict[str, Any]:
@@ -291,7 +293,7 @@ async def main():
     parser.add_argument(
         "--scenario", 
         help="Run a specific scenario (default: run all scenarios)",
-        choices=["indentation_conflict", "false_positive_naming", "internal_conflict"]
+        choices=["indentation_conflict", "false_positive_naming", "internal_conflict", "architectural_scope_false_positive"]
     )
 
     args = parser.parse_args()

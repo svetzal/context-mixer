@@ -10,23 +10,40 @@ from typing import List, Optional
 from rich.console import Console
 
 from context_mixer.domain.conflict import Conflict
+from context_mixer.commands.interactions.conflict_resolution_strategies import (
+    ConflictResolutionStrategy,
+    AutomaticResolutionStrategy,
+    LLMBasedResolutionStrategy,
+    ConflictResolutionContext,
+    ConflictResolutionStrategyFactory
+)
 
 
 class AutomatedConflictResolver:
     """
     Automated conflict resolver that resolves conflicts without user input.
 
-    This resolver uses predefined resolution strategies to automatically
-    resolve conflicts during workbench testing.
+    This resolver uses the Strategy pattern to automatically select and apply
+    appropriate resolution strategies based on conflict characteristics.
     """
 
-    def __init__(self, console: Optional[Console] = None):
-        """Initialize the automated resolver."""
+    def __init__(self, console: Optional[Console] = None, default_strategy: str = "automatic"):
+        """
+        Initialize the automated resolver.
+
+        Args:
+            console: Console for output
+            default_strategy: Default strategy to use ("automatic", "llm", or specific strategy name)
+        """
         self.console = console or Console()
+        self.default_strategy = default_strategy
+        self.context = ConflictResolutionContext(
+            ConflictResolutionStrategyFactory.create_strategy(default_strategy)
+        )
 
     def resolve_conflicts(self, conflicts: List[Conflict]) -> List[Conflict]:
         """
-        Automatically resolve conflicts using predefined strategies.
+        Automatically resolve conflicts using intelligent strategy selection.
 
         Args:
             conflicts: List of conflicts to resolve
@@ -34,69 +51,125 @@ class AutomatedConflictResolver:
         Returns:
             List of resolved conflicts
         """
-        resolved_conflicts = []
+        if not conflicts:
+            return []
 
-        for conflict in conflicts:
-            # Display conflict details similar to interactive resolver
-            self.console.print("\n[bold red]Conflict Detected![/bold red]")
-            self.console.print(f"[bold]Description:[/bold] {conflict.description}")
-            self.console.print("\n[bold]Conflicting Guidance:[/bold]")
+        # Group conflicts by type for batch processing with appropriate strategies
+        conflict_groups = self._group_conflicts_by_characteristics(conflicts)
 
-            for i, guidance in enumerate(conflict.conflicting_guidance):
-                self.console.print(f"\n[bold]{i + 1}. From {guidance.source}:[/bold]")
-                self.console.print(f"{guidance.content}")
+        all_resolved_conflicts = []
 
-            self.console.print(f"\n[yellow]Auto-resolving conflict...[/yellow]")
+        for group_type, group_conflicts in conflict_groups.items():
+            # Select the best strategy for this group of conflicts
+            strategy = self._select_strategy_for_group(group_type, group_conflicts)
 
-            # Determine resolution strategy based on conflict content
-            resolution = self._determine_resolution(conflict)
+            # Update context with the selected strategy
+            self.context.set_strategy(strategy)
 
-            if resolution:
-                # Create a resolved conflict
-                resolved_conflict = Conflict(
-                    description=conflict.description,
-                    conflicting_guidance=conflict.conflicting_guidance,
-                    resolution=resolution
-                )
-                resolved_conflicts.append(resolved_conflict)
-                self.console.print(f"[green]✓ Resolved with: {resolution}[/green]")
-            else:
-                self.console.print(f"[red]✗ Could not auto-resolve conflict[/red]")
-                # Use the first guidance as fallback
-                fallback_resolution = conflict.conflicting_guidance[0].content
-                resolved_conflict = Conflict(
-                    description=conflict.description,
-                    conflicting_guidance=conflict.conflicting_guidance,
-                    resolution=fallback_resolution
-                )
-                resolved_conflicts.append(resolved_conflict)
-                self.console.print(f"[yellow]Using fallback: {fallback_resolution}[/yellow]")
+            self.console.print(f"\n[blue]Processing {len(group_conflicts)} conflicts using {strategy.get_strategy_name()} strategy[/blue]")
 
-        return resolved_conflicts
+            # Resolve conflicts using the selected strategy
+            resolved_group = self.context.resolve_conflicts(group_conflicts, self.console)
+            all_resolved_conflicts.extend(resolved_group)
 
-    def _determine_resolution(self, conflict: Conflict) -> Optional[str]:
+        return all_resolved_conflicts
+
+    def _group_conflicts_by_characteristics(self, conflicts: List[Conflict]) -> dict:
         """
-        Determine the appropriate resolution for a conflict using a generalized approach.
-
-        This method uses a simple strategy that prefers existing content over new content.
-        This is a general approach that works for any type of conflict without hardcoded
-        rules for specific conflict types.
+        Group conflicts by their characteristics for intelligent strategy selection.
 
         Args:
-            conflict: The conflict to resolve
+            conflicts: List of conflicts to group
 
         Returns:
-            Resolution string or None if no guidance available
+            Dictionary mapping group types to lists of conflicts
         """
-        # Prefer existing content over new content
-        # This is a simple, general strategy that works for any conflict type
-        if conflict.conflicting_guidance:
-            # Look for existing content first
-            for guidance in conflict.conflicting_guidance:
-                if guidance.source == "existing":
-                    return guidance.content.strip()
+        groups = {
+            "simple": [],      # Simple conflicts with clear existing vs new patterns
+            "complex": [],     # Complex conflicts that might benefit from LLM analysis
+            "style": [],       # Style-related conflicts (indentation, naming, etc.)
+            "default": []      # Fallback group
+        }
 
-            # If no existing content found, use the first guidance
-            return conflict.conflicting_guidance[0].content.strip()
+        for conflict in conflicts:
+            group_type = self._classify_conflict(conflict)
+            groups[group_type].append(conflict)
 
-        return None
+        # Remove empty groups
+        return {k: v for k, v in groups.items() if v}
+
+    def _classify_conflict(self, conflict: Conflict) -> str:
+        """
+        Classify a conflict based on its characteristics.
+
+        Args:
+            conflict: The conflict to classify
+
+        Returns:
+            Group type string
+        """
+        description_lower = conflict.description.lower()
+
+        # Check for style-related conflicts
+        style_keywords = ["indentation", "spacing", "naming", "case", "format", "style"]
+        if any(keyword in description_lower for keyword in style_keywords):
+            return "style"
+
+        # Check for simple conflicts (existing vs new pattern)
+        sources = [guidance.source for guidance in conflict.conflicting_guidance]
+        if "existing" in sources and len(conflict.conflicting_guidance) == 2:
+            return "simple"
+
+        # Check for complex conflicts that might benefit from LLM analysis
+        if len(conflict.conflicting_guidance) > 2 or len(conflict.description) > 100:
+            return "complex"
+
+        return "default"
+
+    def _select_strategy_for_group(self, group_type: str, conflicts: List[Conflict]) -> ConflictResolutionStrategy:
+        """
+        Select the most appropriate strategy for a group of conflicts.
+
+        Args:
+            group_type: The type of conflict group
+            conflicts: The conflicts in the group
+
+        Returns:
+            ConflictResolutionStrategy instance
+        """
+        if group_type == "simple":
+            # For simple conflicts, prefer existing content
+            return AutomaticResolutionStrategy(prefer_existing=True, fallback_to_first=True)
+
+        elif group_type == "style":
+            # For style conflicts, use automatic resolution with specific preferences
+            return AutomaticResolutionStrategy(prefer_existing=True, fallback_to_first=True)
+
+        elif group_type == "complex":
+            # For complex conflicts, try LLM-based resolution if available
+            # This will fallback to automatic if no LLM gateway is available
+            return LLMBasedResolutionStrategy()
+
+        else:  # default
+            # Use the default strategy specified in constructor
+            return ConflictResolutionStrategyFactory.create_strategy(self.default_strategy)
+
+    def set_strategy(self, strategy: ConflictResolutionStrategy):
+        """
+        Set a specific strategy to use for all conflicts.
+
+        Args:
+            strategy: The strategy to use
+        """
+        self.context.set_strategy(strategy)
+
+    def set_strategy_by_name(self, strategy_name: str, **kwargs):
+        """
+        Set a strategy by name.
+
+        Args:
+            strategy_name: Name of the strategy ("automatic", "llm", "interactive")
+            **kwargs: Additional arguments for strategy initialization
+        """
+        strategy = ConflictResolutionStrategyFactory.create_strategy(strategy_name, **kwargs)
+        self.context.set_strategy(strategy)
