@@ -434,6 +434,26 @@ class VectorKnowledgeStore(KnowledgeStore):
         except Exception as e:
             raise StorageError(f"Failed to validate dependencies: {str(e)}", e)
 
+    async def get_all_chunks(self) -> List[KnowledgeChunk]:
+        """
+        Retrieve all chunks from the knowledge store.
+
+        Returns:
+            List of all KnowledgeChunk objects in the store
+
+        Raises:
+            StorageError: If retrieval operation fails
+        """
+        try:
+            gateway = self._get_gateway()
+            # Run the synchronous gateway method in a thread pool
+            all_chunks = await asyncio.get_event_loop().run_in_executor(
+                None, gateway.get_all_chunks
+            )
+            return all_chunks
+        except Exception as e:
+            raise StorageError(f"Failed to retrieve all chunks: {str(e)}", e)
+
     async def get_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the knowledge store.

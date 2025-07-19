@@ -121,6 +121,7 @@ m = LLMMessage(
 - Do not use conditional assertions—each test must fail for only one clear reason.
 - Use descriptive test names in `Describe*` classes; do not add docstrings to fixtures or Describe classes.
 - For complex assertions, break into multiple clear assertions.
+- Tests MUST ALWAYS PASS, if there are failing tests, your task isn't done.
 
 #### Testing Example
 

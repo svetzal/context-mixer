@@ -192,6 +192,19 @@ class KnowledgeStore(ABC):
         pass
 
     @abstractmethod
+    async def get_all_chunks(self) -> List[KnowledgeChunk]:
+        """
+        Retrieve all chunks from the knowledge store.
+
+        Returns:
+            List of all KnowledgeChunk objects in the store
+
+        Raises:
+            StorageError: If retrieval operation fails
+        """
+        pass
+
+    @abstractmethod
     async def get_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the knowledge store.

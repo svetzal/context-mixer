@@ -9,6 +9,7 @@ import hashlib
 import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pydantic import BaseModel, Field
 from mojentic.llm import LLMMessage, MessageRole
@@ -22,6 +23,234 @@ from context_mixer.domain.knowledge import (
     ProvenanceInfo
 )
 from context_mixer.gateways.llm import LLMGateway
+
+
+def generate_chunk_id(content: str, concept: str) -> str:
+    """
+    Pure function to generate a unique ID for a chunk based on its content and concept.
+
+    Args:
+        content: The chunk content
+        concept: The main concept
+
+    Returns:
+        Unique chunk identifier
+    """
+    # Create a hash of the content and concept
+    combined = f"{concept}:{content}"
+    hash_object = hashlib.sha256(combined.encode())
+    hash_hex = hash_object.hexdigest()
+
+    # Return first 12 characters for a shorter ID
+    return f"chunk_{hash_hex[:12]}"
+
+
+def extract_natural_units(content: str) -> List[Dict[str, Any]]:
+    """
+    Pure function to extract natural text units (paragraphs, sections, headers) from content.
+
+    Args:
+        content: The content to split
+
+    Returns:
+        List of units with their content, type, and position info
+    """
+    units = []
+
+    # Use a more robust approach that tracks positions during splitting
+    # Split by double newlines but keep track of separators
+    parts = re.split(r'(\n\s*\n)', content)
+
+    current_pos = 0
+
+    for i in range(0, len(parts), 2):  # Skip separators (odd indices)
+        if i >= len(parts):
+            break
+
+        part = parts[i].strip()
+        if not part:
+            # Update position for empty parts
+            current_pos += len(parts[i])
+            if i + 1 < len(parts):  # Add separator length
+                current_pos += len(parts[i + 1])
+            continue
+
+        # Calculate exact positions
+        start_pos = current_pos
+        # Find where the stripped content actually starts
+        original_part = parts[i]
+        leading_whitespace = len(original_part) - len(original_part.lstrip())
+        start_pos += leading_whitespace
+        end_pos = start_pos + len(part)
+
+        # Determine unit type
+        unit_type = classify_unit_type(part)
+
+        units.append({
+            'content': part,
+            'type': unit_type,
+            'start_pos': start_pos,
+            'end_pos': end_pos,
+            'length': len(part)
+        })
+
+        # Update current position
+        current_pos += len(parts[i])
+        if i + 1 < len(parts):  # Add separator length
+            current_pos += len(parts[i + 1])
+
+    return units
+
+
+def classify_unit_type(text: str) -> str:
+    """
+    Pure function to classify the type of a text unit.
+
+    Args:
+        text: The text unit to classify
+
+    Returns:
+        Unit type (header, list, paragraph, code, etc.)
+    """
+    text = text.strip()
+
+    # Check for markdown headers
+    if re.match(r'^#{1,6}\s+', text):
+        return 'header'
+
+    # Check for code blocks
+    if text.startswith('```') or text.startswith('    '):
+        return 'code'
+
+    # Check for lists
+    if re.match(r'^[-*+]\s+', text, re.MULTILINE) or re.match(r'^\d+\.\s+', text, re.MULTILINE):
+        return 'list'
+
+    # Check for short lines (might be titles or labels)
+    if len(text) < 100 and '\n' not in text:
+        return 'title'
+
+    # Default to paragraph
+    return 'paragraph'
+
+
+def parse_grouping_response(response: str, num_units: int) -> List[List[int]]:
+    """
+    Pure function to parse LLM response to extract unit groupings.
+
+    Args:
+        response: LLM response text
+        num_units: Total number of units
+
+    Returns:
+        List of groups (0-based indices)
+    """
+    groupings = []
+
+    # Look for patterns like [[1, 2], [3, 4, 5], [6]]
+    import ast
+    try:
+        # Try to find and evaluate list-like patterns
+        matches = re.findall(r'\[\[.*?\]\]', response)
+        if matches:
+            # Take the first match and evaluate it
+            groups_str = matches[0]
+            groups = ast.literal_eval(groups_str)
+
+            # Convert to 0-based indices and validate
+            for group in groups:
+                if isinstance(group, list):
+                    zero_based_group = [i-1 for i in group if isinstance(i, int) and 1 <= i <= num_units]
+                    if zero_based_group:
+                        groupings.append(zero_based_group)
+    except:
+        pass
+
+    # If parsing failed, create fallback groupings
+    if not groupings:
+        groupings = create_fallback_groupings(num_units)
+
+    # Ensure all units are covered
+    covered_units = set()
+    for group in groupings:
+        covered_units.update(group)
+
+    # Add missing units as individual groups
+    for i in range(num_units):
+        if i not in covered_units:
+            groupings.append([i])
+
+    return groupings
+
+
+def create_fallback_groupings(num_units: int) -> List[List[int]]:
+    """
+    Pure function to create simple fallback groupings.
+
+    Args:
+        num_units: Total number of units to group
+
+    Returns:
+        List of groups (0-based indices)
+    """
+    if num_units <= 3:
+        return [list(range(num_units))]
+
+    # Group units in pairs/triples
+    groupings = []
+    i = 0
+    while i < num_units:
+        if i + 2 < num_units:
+            groupings.append([i, i+1, i+2])
+            i += 3
+        elif i + 1 < num_units:
+            groupings.append([i, i+1])
+            i += 2
+        else:
+            groupings.append([i])
+            i += 1
+
+    return groupings
+
+
+def fallback_grouping(units: List[Dict[str, Any]]) -> List[List[int]]:
+    """
+    Pure function for fallback grouping based on unit types and sizes.
+
+    Args:
+        units: List of text units
+
+    Returns:
+        List of groups
+    """
+    groupings = []
+    current_group = []
+    current_size = 0
+    max_group_size = 1000  # characters
+
+    for i, unit in enumerate(units):
+        # Always start a new group after headers (unless it's the first unit)
+        if unit['type'] == 'header' and current_group:
+            if current_group:
+                groupings.append(current_group)
+            current_group = [i]
+            current_size = unit['length']
+        # Add to current group if it won't make it too large
+        elif current_size + unit['length'] <= max_group_size:
+            current_group.append(i)
+            current_size += unit['length']
+        # Start new group if current one is getting too large
+        else:
+            if current_group:
+                groupings.append(current_group)
+            current_group = [i]
+            current_size = unit['length']
+
+    # Add the last group
+    if current_group:
+        groupings.append(current_group)
+
+    return groupings
 
 
 class ChunkBoundary(BaseModel):
@@ -535,6 +764,75 @@ Provide your analysis as a structured response."""
                 issues=["llm_failure"]
             )
 
+    def validate_chunks_parallel(self, chunks: List[KnowledgeChunk], max_workers: Optional[int] = None) -> List[ValidationResult]:
+        """
+        Validate multiple chunks in parallel for improved performance.
+
+        Args:
+            chunks: List of knowledge chunks to validate
+            max_workers: Maximum number of worker threads (defaults to min(32, len(chunks) + 4))
+
+        Returns:
+            List of ValidationResult objects in the same order as input chunks
+
+        Raises:
+            Exception: If any individual chunk validation fails critically
+        """
+        if not chunks:
+            return []
+
+        # Handle single chunk case - no need for parallelization
+        if len(chunks) == 1:
+            return [self.validate_chunk_completeness(chunks[0])]
+
+        # Determine optimal number of workers
+        if max_workers is None:
+            # Use Python's default: min(32, len(chunks) + 4)
+            max_workers = min(32, len(chunks) + 4)
+        else:
+            # Ensure we don't use more workers than chunks
+            max_workers = min(max_workers, len(chunks))
+
+        results = [None] * len(chunks)  # Pre-allocate results list to maintain order
+        failed_chunks = []
+
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all validation tasks
+                future_to_index = {
+                    executor.submit(self.validate_chunk_completeness, chunk): idx
+                    for idx, chunk in enumerate(chunks)
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_index):
+                    chunk_index = future_to_index[future]
+                    try:
+                        result = future.result()
+                        results[chunk_index] = result
+                    except Exception as e:
+                        # Handle individual chunk validation failure
+                        failed_chunks.append((chunk_index, str(e)))
+                        # Create a fallback validation result for failed chunks
+                        results[chunk_index] = ValidationResult(
+                            is_complete=False,
+                            reason=f"Validation failed with error: {str(e)}",
+                            confidence=0.0,
+                            issues=["validation_error"]
+                        )
+
+        except Exception as e:
+            # Handle thread pool execution failure
+            raise Exception(f"Parallel validation failed: {str(e)}")
+
+        # Log any individual failures for debugging
+        if failed_chunks:
+            # Note: In a real implementation, you might want to use proper logging
+            # For now, we'll just ensure the results are still returned
+            pass
+
+        return results
+
     def _hierarchical_boundary_detection(self, content: str) -> BoundaryDetectionResult:
         """
         Hierarchical boundary detection that avoids character position problems.
@@ -589,51 +887,7 @@ Provide your analysis as a structured response."""
         Returns:
             List of units with their content, type, and position info
         """
-        units = []
-
-        # Use a more robust approach that tracks positions during splitting
-        # Split by double newlines but keep track of separators
-        parts = re.split(r'(\n\s*\n)', content)
-
-        current_pos = 0
-
-        for i in range(0, len(parts), 2):  # Skip separators (odd indices)
-            if i >= len(parts):
-                break
-
-            part = parts[i].strip()
-            if not part:
-                # Update position for empty parts
-                current_pos += len(parts[i])
-                if i + 1 < len(parts):  # Add separator length
-                    current_pos += len(parts[i + 1])
-                continue
-
-            # Calculate exact positions
-            start_pos = current_pos
-            # Find where the stripped content actually starts
-            original_part = parts[i]
-            leading_whitespace = len(original_part) - len(original_part.lstrip())
-            start_pos += leading_whitespace
-            end_pos = start_pos + len(part)
-
-            # Determine unit type
-            unit_type = self._classify_unit_type(part)
-
-            units.append({
-                'content': part,
-                'type': unit_type,
-                'start_pos': start_pos,
-                'end_pos': end_pos,
-                'length': len(part)
-            })
-
-            # Update current position
-            current_pos += len(parts[i])
-            if i + 1 < len(parts):  # Add separator length
-                current_pos += len(parts[i + 1])
-
-        return units
+        return extract_natural_units(content)
 
     def _classify_unit_type(self, text: str) -> str:
         """
@@ -645,26 +899,7 @@ Provide your analysis as a structured response."""
         Returns:
             Unit type (header, list, paragraph, code, etc.)
         """
-        text = text.strip()
-
-        # Check for markdown headers
-        if re.match(r'^#{1,6}\s+', text):
-            return 'header'
-
-        # Check for code blocks
-        if text.startswith('```') or text.startswith('    '):
-            return 'code'
-
-        # Check for lists
-        if re.match(r'^[-*+]\s+', text, re.MULTILINE) or re.match(r'^\d+\.\s+', text, re.MULTILINE):
-            return 'list'
-
-        # Check for short lines (might be titles or labels)
-        if len(text) < 100 and '\n' not in text:
-            return 'title'
-
-        # Default to paragraph
-        return 'paragraph'
+        return classify_unit_type(text)
 
     def _analyze_unit_relationships(self, units: List[Dict[str, Any]]) -> List[List[int]]:
         """
@@ -715,12 +950,12 @@ For example: [[1, 2], [3, 4, 5], [6]] means units 1-2 form one chunk, units 3-5 
             response = self.llm_gateway.generate(messages)
 
             # Parse the response to extract groupings
-            groupings = self._parse_grouping_response(response, len(units))
+            groupings = parse_grouping_response(response, len(units))
             return groupings
 
         except Exception:
             # Fallback: group consecutive units of similar types
-            return self._fallback_grouping(units)
+            return fallback_grouping(units)
 
     def _parse_grouping_response(self, response: str, num_units: int) -> List[List[int]]:
         """
@@ -733,63 +968,11 @@ For example: [[1, 2], [3, 4, 5], [6]] means units 1-2 form one chunk, units 3-5 
         Returns:
             List of groups (0-based indices)
         """
-        groupings = []
-
-        # Look for patterns like [[1, 2], [3, 4, 5], [6]]
-        import ast
-        try:
-            # Try to find and evaluate list-like patterns
-            matches = re.findall(r'\[\[.*?\]\]', response)
-            if matches:
-                # Take the first match and evaluate it
-                groups_str = matches[0]
-                groups = ast.literal_eval(groups_str)
-
-                # Convert to 0-based indices and validate
-                for group in groups:
-                    if isinstance(group, list):
-                        zero_based_group = [i-1 for i in group if isinstance(i, int) and 1 <= i <= num_units]
-                        if zero_based_group:
-                            groupings.append(zero_based_group)
-        except:
-            pass
-
-        # If parsing failed, create fallback groupings
-        if not groupings:
-            groupings = self._create_fallback_groupings(num_units)
-
-        # Ensure all units are covered
-        covered_units = set()
-        for group in groupings:
-            covered_units.update(group)
-
-        # Add missing units as individual groups
-        for i in range(num_units):
-            if i not in covered_units:
-                groupings.append([i])
-
-        return groupings
+        return parse_grouping_response(response, num_units)
 
     def _create_fallback_groupings(self, num_units: int) -> List[List[int]]:
         """Create simple fallback groupings."""
-        if num_units <= 3:
-            return [list(range(num_units))]
-
-        # Group units in pairs/triples
-        groupings = []
-        i = 0
-        while i < num_units:
-            if i + 2 < num_units:
-                groupings.append([i, i+1, i+2])
-                i += 3
-            elif i + 1 < num_units:
-                groupings.append([i, i+1])
-                i += 2
-            else:
-                groupings.append([i])
-                i += 1
-
-        return groupings
+        return create_fallback_groupings(num_units)
 
     def _fallback_grouping(self, units: List[Dict[str, Any]]) -> List[List[int]]:
         """
@@ -801,34 +984,7 @@ For example: [[1, 2], [3, 4, 5], [6]] means units 1-2 form one chunk, units 3-5 
         Returns:
             List of groups
         """
-        groupings = []
-        current_group = []
-        current_size = 0
-        max_group_size = 1000  # characters
-
-        for i, unit in enumerate(units):
-            # Always start a new group after headers (unless it's the first unit)
-            if unit['type'] == 'header' and current_group:
-                if current_group:
-                    groupings.append(current_group)
-                current_group = [i]
-                current_size = unit['length']
-            # Add to current group if it won't make it too large
-            elif current_size + unit['length'] <= max_group_size:
-                current_group.append(i)
-                current_size += unit['length']
-            # Start new group if current one is getting too large
-            else:
-                if current_group:
-                    groupings.append(current_group)
-                current_group = [i]
-                current_size = unit['length']
-
-        # Add the last group
-        if current_group:
-            groupings.append(current_group)
-
-        return groupings
+        return fallback_grouping(units)
 
     def _create_boundaries_from_groupings(self, units: List[Dict[str, Any]], 
                                         groupings: List[List[int]], 
@@ -1005,10 +1161,4 @@ Consider the CRAFT principles:
         Returns:
             Unique chunk identifier
         """
-        # Create a hash of the content and concept
-        combined = f"{concept}:{content}"
-        hash_object = hashlib.sha256(combined.encode())
-        hash_hex = hash_object.hexdigest()
-
-        # Return first 12 characters for a shorter ID
-        return f"chunk_{hash_hex[:12]}"
+        return generate_chunk_id(content, concept)

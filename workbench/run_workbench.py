@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -28,7 +29,7 @@ sys.path.insert(0, str(project_root / "src"))
 sys.path.insert(0, str(project_root))
 
 from context_mixer.config import Config
-from context_mixer.gateways.llm import LLMGateway
+from context_mixer.gateways.llm import LLMGateway, OpenAIModels
 from context_mixer.commands.ingest import do_ingest
 from workbench.automated_resolver import AutomatedConflictResolver
 from workbench.scenarios.indentation_conflict import get_scenario as get_indentation_scenario
@@ -46,7 +47,7 @@ class WorkbenchRunner:
         """Initialize the workbench runner."""
         self.console = Console()
         self.automated_resolver = AutomatedConflictResolver(self.console)
-        self.model_name = "o4-mini"
+        self.model = OpenAIModels.O4_MINI
 
         # Configure OpenAI gateway
         api_key = os.environ.get("OPENAI_API_KEY")
@@ -55,7 +56,7 @@ class WorkbenchRunner:
             sys.exit(1)
 
         openai_gateway = OpenAIGateway(api_key=api_key)
-        self.llm_gateway = LLMGateway(model=self.model_name, gateway=openai_gateway)
+        self.llm_gateway = LLMGateway(model=self.model.value, gateway=openai_gateway)
 
         # Available scenarios
         self.scenarios = {
@@ -76,6 +77,9 @@ class WorkbenchRunner:
         """
         if scenario_name not in self.scenarios:
             raise ValueError(f"Unknown scenario: {scenario_name}")
+
+        # Start timing the scenario
+        start_time = time.time()
 
         scenario = self.scenarios[scenario_name]()
         self.console.print(f"\n[bold blue]Running scenario: {scenario.name}[/bold blue]")
@@ -102,7 +106,8 @@ class WorkbenchRunner:
                 "conflicts_detected": 0,
                 "conflicts_expected": len(scenario.expected_conflicts),
                 "validation_results": [],
-                "errors": []
+                "errors": [],
+                "execution_time_seconds": 0.0
             }
 
             try:
@@ -135,6 +140,14 @@ class WorkbenchRunner:
             except Exception as e:
                 results["errors"].append(str(e))
                 self.console.print(f"[red]Error running scenario: {e}[/red]")
+
+        # Calculate execution time
+        end_time = time.time()
+        execution_time = end_time - start_time
+        results["execution_time_seconds"] = execution_time
+
+        # Display timing information
+        self.console.print(f"[dim]⏱️  Scenario completed in {execution_time:.2f} seconds[/dim]")
 
         return results
 
@@ -178,14 +191,18 @@ class WorkbenchRunner:
         Returns:
             Dictionary with overall results
         """
+        # Start timing the overall execution
+        overall_start_time = time.time()
+
         self.console.print("[bold green]🚀 Starting Conflict Detection Workbench[/bold green]")
-        self.console.print(f"Using OpenAI model: {self.model_name}")
+        self.console.print(f"Using OpenAI model: {self.model}")
 
         overall_results = {
             "total_scenarios": len(self.scenarios),
             "passed_scenarios": 0,
             "failed_scenarios": 0,
-            "scenario_results": []
+            "scenario_results": [],
+            "total_execution_time_seconds": 0.0
         }
 
         for scenario_name in self.scenarios.keys():
@@ -213,6 +230,14 @@ class WorkbenchRunner:
                 overall_results["failed_scenarios"] += 1
                 self.console.print(f"[red]❌ {scenario_name} FAILED with exception: {e}[/red]")
 
+        # Calculate total execution time
+        overall_end_time = time.time()
+        total_execution_time = overall_end_time - overall_start_time
+        overall_results["total_execution_time_seconds"] = total_execution_time
+
+        # Display overall timing information
+        self.console.print(f"\n[bold dim]⏱️  Total execution time: {total_execution_time:.2f} seconds[/bold dim]")
+
         return overall_results
 
     def print_summary(self, results: Dict[str, Any]):
@@ -223,14 +248,16 @@ class WorkbenchRunner:
         table.add_column("Scenario", style="cyan")
         table.add_column("Status", style="bold")
         table.add_column("Validations", style="dim")
+        table.add_column("Time (s)", style="yellow", justify="right")
 
         for result in results["scenario_results"]:
             status = "[green]PASSED[/green]" if result["passed"] else "[red]FAILED[/red]"
             validation_count = len(result["validation_results"])
             passed_validations = sum(1 for v in result["validation_results"] if v["passed"])
             validations = f"{passed_validations}/{validation_count}"
+            execution_time = f"{result.get('execution_time_seconds', 0.0):.2f}"
 
-            table.add_row(result["scenario_name"], status, validations)
+            table.add_row(result["scenario_name"], status, validations, execution_time)
 
         self.console.print(table)
 
@@ -246,11 +273,13 @@ class WorkbenchRunner:
             panel_style = "red"
             status_text = f"⚠️  {failed} of {total} scenarios failed"
 
+        total_time = results.get("total_execution_time_seconds", 0.0)
         summary_text = f"""
 {status_text}
 
 Passed: {passed}/{total}
 Failed: {failed}/{total}
+Total Time: {total_time:.2f} seconds
         """
 
         self.console.print(Panel(summary_text.strip(), title="Final Results", style=panel_style))

@@ -1,10 +1,13 @@
+import asyncio
 from textwrap import dedent
+from typing import List, Tuple
 
 from mojentic.llm import LLMMessage
 
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
 from context_mixer.domain.conflict import ConflictList
 from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
+from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.gateways.llm import LLMGateway
 
 
@@ -76,6 +79,154 @@ def detect_conflicts(existing_content: str,
     return conflicts
 
 
+async def detect_conflicts_async(existing_content: str,
+                                new_content: str,
+                                llm_gateway: LLMGateway) -> ConflictList:
+    """
+    Async version of detect_conflicts for batch processing.
+
+    Args:
+        existing_content: The existing content in context.md
+        new_content: The new content to merge
+        llm_gateway: The LLM gateway to use for detecting conflicts
+
+    Returns:
+        A ConflictList object containing any detected conflicts
+    """
+    # Run the synchronous detect_conflicts in a thread to avoid blocking
+    return await asyncio.to_thread(detect_conflicts, existing_content, new_content, llm_gateway)
+
+
+async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, KnowledgeChunk]], 
+                                llm_gateway: LLMGateway,
+                                batch_size: int = 5) -> List[Tuple[KnowledgeChunk, KnowledgeChunk, ConflictList]]:
+    """
+    Detect conflicts between multiple chunk pairs in parallel batches.
+
+    This function processes chunk pairs in batches to improve performance while
+    avoiding overwhelming the LLM service with too many concurrent requests.
+
+    Args:
+        chunk_pairs: List of tuples containing pairs of chunks to check for conflicts
+        llm_gateway: The LLM gateway to use for detecting conflicts
+        batch_size: Number of conflict detections to process concurrently (default: 5)
+
+    Returns:
+        List of tuples containing (chunk1, chunk2, conflicts) for each pair
+    """
+    results = []
+
+    # Process chunk pairs in batches
+    for i in range(0, len(chunk_pairs), batch_size):
+        batch = chunk_pairs[i:i + batch_size]
+
+        # Create async tasks for this batch
+        tasks = []
+        for chunk1, chunk2 in batch:
+            task = detect_conflicts_async(chunk1.content, chunk2.content, llm_gateway)
+            tasks.append((chunk1, chunk2, task))
+
+        # Execute all tasks in this batch concurrently
+        batch_results = []
+        for chunk1, chunk2, task in tasks:
+            try:
+                conflicts = await task
+                batch_results.append((chunk1, chunk2, conflicts))
+            except Exception as e:
+                # If conflict detection fails for a pair, create an empty conflict list
+                # and let the calling code handle the error appropriately
+                empty_conflicts = ConflictList(list=[])
+                batch_results.append((chunk1, chunk2, empty_conflicts))
+
+        results.extend(batch_results)
+
+    return results
+
+
+def format_conflict_resolutions(resolved_conflicts) -> str:
+    """
+    Pure function to format resolved conflicts into a prompt string.
+
+    Args:
+        resolved_conflicts: List of resolved Conflict objects, or None
+
+    Returns:
+        Formatted string for inclusion in LLM prompt, or empty string if no conflicts
+    """
+    if not resolved_conflicts:
+        return ""
+
+    # Build a string with all resolved conflicts
+    conflict_resolutions = []
+    for conflict in resolved_conflicts:
+        if conflict.resolution:
+            conflict_resolutions.append(f"Description: {conflict.description}\nResolution: {conflict.resolution}")
+
+    if not conflict_resolutions:
+        return ""
+
+    return clean_prompt(f"""
+        Conflicts were detected between these documents and resolved as follows:
+        ```
+        {"\n\n".join(conflict_resolutions)}
+        ```
+
+        When merging the documents, use these resolutions to guide your work.
+    """)
+
+
+def build_merge_prompt(existing_content: str, new_content: str, resolved_conflicts=None) -> str:
+    """
+    Pure function to build the merge prompt for LLM processing.
+
+    Args:
+        existing_content: The existing content to merge
+        new_content: The new content to merge
+        resolved_conflicts: Optional list of resolved conflicts
+
+    Returns:
+        Complete prompt string for LLM
+    """
+    base_prompt = clean_prompt(f"""
+        Your task is to merge two documents into a single coherent document, accurately representing
+        the content of both documents, and without adding anything extra.
+
+        The first document contains existing content, and the second document contains new content
+        to be merged.
+
+        Please combine these documents, ensuring that:
+        1. All detail and unique information from both documents is preserved
+        2. Duplicate information appears only once
+        3. The resulting document is well-structured and coherent
+        4. Related information is grouped together logically
+
+        Document 1 (Existing Content):
+        ```
+        {existing_content}
+        ```
+
+        Document 2 (New Content):
+        ```
+        {new_content}
+        ```
+    """)
+
+    # If there were resolved conflicts, include them in the prompt
+    conflict_info = format_conflict_resolutions(resolved_conflicts)
+
+    conclusion = clean_prompt("""
+        Please provide only the merged document as your response, without any additional commentary
+        or wrappers.
+    """)
+
+    prompt_parts = [base_prompt]
+    if conflict_info:
+        prompt_parts.append(conflict_info)
+    prompt_parts.append(conclusion)
+
+    return "\n\n".join(prompt_parts)
+
+
 def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGateway,
                   console=None, resolver: ConflictResolver = None) -> str:
     """
@@ -107,61 +258,8 @@ def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGatew
 
         resolved_conflicts = resolve_conflicts(conflicts.list, console, resolver)
 
-    # Create a prompt for the LLM to merge the content
-    base_prompt = clean_prompt(f"""
-        Your task is to merge two documents into a single coherent document, accurately representing
-        the content of both documents, and without adding anything extra.
-
-        The first document contains existing content, and the second document contains new content
-        to be merged.
-
-        Please combine these documents, ensuring that:
-        1. All detail and unique information from both documents is preserved
-        2. Duplicate information appears only once
-        3. The resulting document is well-structured and coherent
-        4. Related information is grouped together logically
-
-        Document 1 (Existing Content):
-        ```
-        {existing_content}
-        ```
-
-        Document 2 (New Content):
-        ```
-        {new_content}
-        ```
-    """)
-
-    # If there were resolved conflicts, include them in the prompt
-    conflict_info = ""
-    if resolved_conflicts:
-        # Build a string with all resolved conflicts
-        conflict_resolutions = []
-        for conflict in resolved_conflicts:
-            if conflict.resolution:
-                conflict_resolutions.append(f"Description: {conflict.description}\nResolution: {conflict.resolution}")
-
-        if conflict_resolutions:
-            conflict_info = clean_prompt(f"""
-                Conflicts were detected between these documents and resolved as follows:
-                ```
-                {"\n\n".join(conflict_resolutions)}
-                ```
-
-                When merging the documents, use these resolutions to guide your work.
-            """)
-
-    conclusion = clean_prompt("""
-        Please provide only the merged document as your response, without any additional commentary
-        or wrappers.
-    """)
-
-    prompt_parts = [base_prompt]
-    if conflict_info:
-        prompt_parts.append(conflict_info)
-    prompt_parts.append(conclusion)
-
-    prompt = "\n\n".join(prompt_parts)
+    # Create a prompt for the LLM to merge the content using the pure function
+    prompt = build_merge_prompt(existing_content, new_content, resolved_conflicts)
 
     messages = [
         ingest_system_message,

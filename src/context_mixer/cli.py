@@ -22,7 +22,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from context_mixer.commands.init import do_init
-from context_mixer.commands.ingest import do_ingest
+from context_mixer.commands.ingest import do_ingest, IngestCommand
 from context_mixer.commands.open import do_open
 from context_mixer.commands.slice import do_slice
 from context_mixer.commands.assemble import do_assemble
@@ -36,6 +36,7 @@ from context_mixer.commands.quarantine import (
 from context_mixer.config import Config
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
+from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 
 # Create Typer app
 app = typer.Typer(
@@ -242,7 +243,15 @@ def ingest(
     contamination.
     """
     # Create a new config with the specified library path if provided
-    asyncio.run(do_ingest(console, Config(library_path), llm_gateway, path, project_id, project_name))
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the ingest command with injected dependencies
+    ingest_command = IngestCommand(knowledge_store)
+    asyncio.run(ingest_command.execute(console, config, llm_gateway, path, project_id, project_name))
 
 
 @app.command()

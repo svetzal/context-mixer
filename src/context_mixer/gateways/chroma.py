@@ -127,6 +127,40 @@ class ChromaGateway:
 
         return KnowledgeChunk(**chunk_data)
 
+    def get_all_chunks(self) -> List[KnowledgeChunk]:
+        """
+        Retrieve all knowledge chunks from the database.
+
+        Returns:
+            List of all KnowledgeChunk objects in the store
+        """
+        collection = self._get_collection()
+
+        # Get all chunks from the collection
+        results = collection.get(include=["documents", "metadatas", "embeddings"])
+
+        if not results["ids"]:
+            return []
+
+        chunks = []
+        for i, chunk_id in enumerate(results["ids"]):
+            embedding = None
+            if (results["embeddings"] is not None and 
+                len(results["embeddings"]) > i and 
+                results["embeddings"][i] is not None):
+                embedding = results["embeddings"][i]
+
+            chunk_data = {
+                "id": chunk_id,
+                "content": results["documents"][i],
+                "metadata": self.adapter._chroma_dict_to_metadata(results["metadatas"][i]),
+                "embedding": embedding
+            }
+
+            chunks.append(KnowledgeChunk(**chunk_data))
+
+        return chunks
+
     def delete_knowledge_chunk(self, chunk_id: str) -> bool:
         """
         Delete a knowledge chunk by ID.

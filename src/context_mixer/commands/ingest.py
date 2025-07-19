@@ -16,6 +16,91 @@ from context_mixer.domain.knowledge_store import KnowledgeStore, KnowledgeStoreF
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
 from context_mixer.domain.knowledge import KnowledgeChunk
+from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
+
+
+class IngestCommand:
+    """
+    Command for ingesting content into the knowledge store.
+
+    This class implements dependency injection to improve testability
+    and modularity as outlined in the architectural improvements backlog.
+    """
+
+    def __init__(self, knowledge_store: KnowledgeStore):
+        """
+        Initialize the IngestCommand with injected dependencies.
+
+        Args:
+            knowledge_store: The knowledge store to use for storing chunks
+        """
+        self.knowledge_store = knowledge_store
+
+    async def execute(self, console, config: Config, llm_gateway: LLMGateway, path: Path = None, 
+                     project_id: str = None, project_name: str = None, commit: bool = True, 
+                     detect_boundaries: bool = True, resolver: ConflictResolver = None):
+        """
+        Execute the ingest command with injected dependencies.
+
+        Args:
+            console: Rich console for output
+            config: Configuration object
+            llm_gateway: LLM gateway for processing
+            path: Path to ingest
+            project_id: Project identifier
+            project_name: Project name
+            commit: Whether to commit changes
+            detect_boundaries: Whether to detect boundaries
+            resolver: Conflict resolver
+        """
+        return await do_ingest(
+            console=console,
+            config=config, 
+            llm_gateway=llm_gateway,
+            path=path,
+            project_id=project_id,
+            project_name=project_name,
+            commit=commit,
+            detect_boundaries=detect_boundaries,
+            resolver=resolver,
+            knowledge_store=self.knowledge_store
+        )
+
+
+async def _read_files_parallel(file_paths: list[Path], input_path: Path, console) -> list[tuple[Path, str]]:
+    """
+    Read multiple files concurrently for better performance.
+
+    Args:
+        file_paths: List of file paths to read
+        input_path: Base input path for relative path calculation
+        console: Rich console for progress reporting
+
+    Returns:
+        List of tuples containing (file_path, file_content) for successfully read files
+    """
+    async def read_file(file_path: Path) -> tuple[Path, str | None]:
+        """Read a single file asynchronously with error handling."""
+        try:
+            # Display progress for each file
+            relative_name = file_path.relative_to(input_path) if input_path.is_dir() else file_path.name
+            console.print(f"[blue]Processing: {relative_name}[/blue]")
+
+            # Use asyncio.to_thread to run the blocking read_text() in a thread pool
+            content = await asyncio.to_thread(file_path.read_text)
+            return file_path, content
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not read {file_path}: {str(e)}[/yellow]")
+            return file_path, None
+
+    # Create tasks for all files and run them concurrently
+    tasks = [read_file(path) for path in file_paths]
+    results = await asyncio.gather(*tasks)
+
+    # Filter out failed reads (where content is None)
+    successful_reads = [(path, content) for path, content in results if content is not None]
+
+    return successful_reads
 
 
 def _find_ingestible_files(directory_path: Path) -> list[Path]:
@@ -69,31 +154,39 @@ def _find_ingestible_files(directory_path: Path) -> list[Path]:
     return sorted(list(set(ingestible_files)))
 
 
-def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_store, console):
+def apply_conflict_resolutions(
+    resolved_conflicts, 
+    valid_chunks, 
+    existing_chunks_to_store
+):
     """
-    Apply conflict resolutions by creating new chunks with resolved content
+    Pure function to apply conflict resolutions by creating new chunks with resolved content
     and excluding conflicting chunks from storage.
 
     Args:
         resolved_conflicts: List of Conflict objects with resolutions
         valid_chunks: List of all valid chunks from ingestion
-        chunks_to_store: List of chunks already marked for storage (no conflicts)
-        console: Rich console for output
+        existing_chunks_to_store: List of chunks already marked for storage (no conflicts)
 
     Returns:
-        List of additional chunks to store (resolved chunks, excluding conflicting ones)
+        Tuple of (filtered_existing_chunks, additional_chunks_to_store, resolution_messages)
+        where:
+        - filtered_existing_chunks: existing chunks with conflicting ones removed
+        - additional_chunks_to_store: new chunks to store (resolved chunks + non-conflicting ones)
+        - resolution_messages: list of messages about created resolved chunks
     """
     chunks_to_add = []
     conflicting_chunk_contents = set()
+    resolution_messages = []
 
     # Collect all conflicting chunk contents to exclude them
     for conflict in resolved_conflicts:
         for guidance in conflict.conflicting_guidance:
             conflicting_chunk_contents.add(guidance.content.strip())
 
-    # Remove any conflicting chunks that were already added to chunks_to_store
-    chunks_to_store[:] = [chunk for chunk in chunks_to_store 
-                         if chunk.content.strip() not in conflicting_chunk_contents]
+    # Filter out conflicting chunks from existing chunks to store
+    filtered_existing_chunks = [chunk for chunk in existing_chunks_to_store 
+                               if chunk.content.strip() not in conflicting_chunk_contents]
 
     # For each resolved conflict, create a new chunk with the resolved content
     for i, conflict in enumerate(resolved_conflicts):
@@ -116,18 +209,47 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
                     embedding=None  # Will be generated when stored
                 )
                 chunks_to_add.append(resolved_chunk)
-                console.print(f"[green]Created resolved chunk for conflict: {conflict.description[:50]}...[/green]")
+                resolution_messages.append(f"Created resolved chunk for conflict: {conflict.description[:50]}...")
 
-    # Add all non-conflicting chunks that aren't already in chunks_to_store
+    # Add all non-conflicting chunks that aren't already in existing_chunks_to_store
     for chunk in valid_chunks:
         if (chunk.content.strip() not in conflicting_chunk_contents and 
-            chunk not in chunks_to_store):
+            chunk not in existing_chunks_to_store):
             chunks_to_add.append(chunk)
+
+    return filtered_existing_chunks, chunks_to_add, resolution_messages
+
+
+def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_store, console):
+    """
+    Apply conflict resolutions by creating new chunks with resolved content
+    and excluding conflicting chunks from storage.
+
+    Args:
+        resolved_conflicts: List of Conflict objects with resolutions
+        valid_chunks: List of all valid chunks from ingestion
+        chunks_to_store: List of chunks already marked for storage (no conflicts)
+        console: Rich console for output
+
+    Returns:
+        List of additional chunks to store (resolved chunks, excluding conflicting ones)
+    """
+    # Use the pure function to do the actual work
+    filtered_existing_chunks, chunks_to_add, resolution_messages = apply_conflict_resolutions(
+        resolved_conflicts, valid_chunks, chunks_to_store
+    )
+
+    # Update the chunks_to_store list in place (maintaining original behavior)
+    chunks_to_store[:] = filtered_existing_chunks
+
+    # Print resolution messages
+    for message in resolution_messages:
+        console.print(f"[green]{message}[/green]")
 
     return chunks_to_add
 
 
-async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None):
+async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None):
     """
     Ingest existing prompt artifacts into the library using intelligent chunking.
 
@@ -142,9 +264,14 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
         detect_boundaries: Whether to use semantic boundary detection for chunking
         resolver: Optional automated conflict resolver. If provided, conflicts will be
                  resolved automatically without user input.
+        knowledge_store: Optional injected knowledge store. If not provided, will create
+                        a vector store using the factory pattern.
     """
     # Disable tokenizer parallelism to avoid warnings when using async operations
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    # Initialize timing collector for performance monitoring
+    timing_collector = TimingCollector()
 
     try:
         input_path = Path(path)
@@ -172,20 +299,20 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
         all_chunks = []
         all_content = []
 
-        for file_path in files_to_process:
-            console.print(f"[blue]Processing: {file_path.relative_to(input_path) if input_path.is_dir() else file_path.name}[/blue]")
+        # Read files in parallel for better performance
+        with time_operation("file_reading", timing_collector) as file_timing:
+            file_contents = await _read_files_parallel(files_to_process, input_path, console)
 
-            try:
-                file_content = file_path.read_text()
-                # For single files, preserve original behavior (no header)
-                # For multiple files, add headers to distinguish content
-                if len(files_to_process) == 1:
-                    all_content.append(file_content)
-                else:
-                    all_content.append(f"# Content from {file_path}\n\n{file_content}")
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not read {file_path}: {str(e)}[/yellow]")
-                continue
+        console.print(f"[dim]📁 File reading completed in {format_duration(file_timing.duration_seconds)}[/dim]")
+
+        # Process the successfully read files
+        for file_path, file_content in file_contents:
+            # For single files, preserve original behavior (no header)
+            # For multiple files, add headers to distinguish content
+            if len(files_to_process) == 1:
+                all_content.append(file_content)
+            else:
+                all_content.append(f"# Content from {file_path}\n\n{file_content}")
 
         if not all_content:
             console.print("[red]Error: No content could be read from any files[/red]")
@@ -212,25 +339,31 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 console.print(f"[cyan]{project_info}[/cyan]")
 
             chunking_engine = ChunkingEngine(llm_gateway)
-            chunks = chunking_engine.chunk_by_structured_output(
-                ingest_content, 
-                source=str(path),
-                project_id=project_id,
-                project_name=project_name,
-                project_path=determined_project_path
-            )
+            with time_operation("chunk_creation", timing_collector) as chunk_timing:
+                chunks = chunking_engine.chunk_by_structured_output(
+                    ingest_content, 
+                    source=str(path),
+                    project_id=project_id,
+                    project_name=project_name,
+                    project_path=determined_project_path
+                )
+
+            console.print(f"[dim]🧩 Chunk creation completed in {format_duration(chunk_timing.duration_seconds)}[/dim]")
 
             # Display chunking results with validation status
             if chunks:
                 # Validate all chunks first
-                chunk_validations = []
-                valid_chunks = []
+                with time_operation("chunk_validation", timing_collector) as validation_timing:
+                    chunk_validations = []
+                    valid_chunks = []
 
-                for chunk in chunks:
-                    validation_result = chunking_engine.validate_chunk_completeness(chunk)
-                    chunk_validations.append((chunk, validation_result))
-                    if validation_result.is_complete:
-                        valid_chunks.append(chunk)
+                    for chunk in chunks:
+                        validation_result = chunking_engine.validate_chunk_completeness(chunk)
+                        chunk_validations.append((chunk, validation_result))
+                        if validation_result.is_complete:
+                            valid_chunks.append(chunk)
+
+                console.print(f"[dim]✅ Chunk validation completed in {format_duration(validation_timing.duration_seconds)}[/dim]")
 
                 # Create comprehensive report table
                 table = Table(title="Chunk Ingestion Report")
@@ -277,8 +410,10 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 console.print(f"[green]Successfully processed {len(chunks)} chunks: {len(valid_chunks)} accepted, {len(chunks) - len(valid_chunks)} rejected[/green]")
 
                 # Store chunks in vector knowledge store
-                vector_store_path = config.library_path / "vector_store"
-                knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+                # Use injected knowledge store if provided, otherwise create one (for backward compatibility)
+                if knowledge_store is None:
+                    vector_store_path = config.library_path / "vector_store"
+                    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
 
                 # Check for conflicts before storing chunks
                 all_conflicts = []
@@ -286,82 +421,139 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
                 # First, check for conflicts between chunks within the same ingestion batch
                 console.print("[blue]Checking for conflicts between new chunks...[/blue]")
-                for i, chunk1 in enumerate(valid_chunks):
-                    for j, chunk2 in enumerate(valid_chunks[i+1:], i+1):
+                with time_operation("conflict_detection_internal", timing_collector) as internal_conflict_timing:
+                    # Create pairs of chunks to check for conflicts
+                    chunk_pairs = []
+                    for i, chunk1 in enumerate(valid_chunks):
+                        for j, chunk2 in enumerate(valid_chunks[i+1:], i+1):
+                            chunk_pairs.append((chunk1, chunk2))
+
+                    if chunk_pairs:
+                        # Use batch conflict detection for improved performance
+                        from context_mixer.commands.operations.merge import detect_conflicts_batch
+
+                        # Get batch size from config or use default of 5
+                        batch_size = getattr(config, 'conflict_detection_batch_size', 5)
+                        console.print(f"[dim]Processing {len(chunk_pairs)} chunk pairs in batches of {batch_size}[/dim]")
+
                         try:
-                            # Use the LLM-based conflict detection from merge operations
-                            from context_mixer.commands.operations.merge import detect_conflicts
-                            conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
-                            if conflicts.list:
-                                console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
-                                for conflict in conflicts.list:
-                                    # Update the conflict to indicate it's between new chunks
-                                    updated_conflict = Conflict(
-                                        description=f"Conflicting guidance detected between new chunks: {conflict.description}",
-                                        conflicting_guidance=[
-                                            ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
-                                            ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
-                                        ]
-                                    )
-                                    all_conflicts.append(updated_conflict)
+                            batch_results = await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size)
+
+                            for chunk1, chunk2, conflicts in batch_results:
+                                if conflicts.list:
+                                    console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
+                                    for conflict in conflicts.list:
+                                        # Update the conflict to indicate it's between new chunks
+                                        updated_conflict = Conflict(
+                                            description=f"Conflicting guidance detected between new chunks: {conflict.description}",
+                                            conflicting_guidance=[
+                                                ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
+                                                ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
+                                            ]
+                                        )
+                                        all_conflicts.append(updated_conflict)
                         except Exception as e:
-                            console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(e)}[/yellow]")
+                            console.print(f"[yellow]Warning: Batch conflict detection failed, falling back to sequential processing: {str(e)}[/yellow]")
+                            # Fallback to sequential processing if batch processing fails
+                            for chunk1, chunk2 in chunk_pairs:
+                                try:
+                                    from context_mixer.commands.operations.merge import detect_conflicts
+                                    conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
+                                    if conflicts.list:
+                                        console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
+                                        for conflict in conflicts.list:
+                                            updated_conflict = Conflict(
+                                                description=f"Conflicting guidance detected between new chunks: {conflict.description}",
+                                                conflicting_guidance=[
+                                                    ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
+                                                    ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
+                                                ]
+                                            )
+                                            all_conflicts.append(updated_conflict)
+                                except Exception as inner_e:
+                                    console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(inner_e)}[/yellow]")
+
+                console.print(f"[dim]🔍 Internal conflict detection completed in {format_duration(internal_conflict_timing.duration_seconds)}[/dim]")
 
                 # Then, check for conflicts with existing chunks in the knowledge store
                 console.print("[blue]Checking for conflicts with existing content...[/blue]")
-                for chunk in valid_chunks:
-                    try:
-                        conflicting_chunks = await knowledge_store.detect_conflicts(chunk)
-                        if conflicting_chunks:
-                            # Create conflict objects for user resolution
-                            for conflicting_chunk in conflicting_chunks:
-                                conflict = Conflict(
-                                    description=f"Conflicting guidance detected between new content and existing content",
-                                    conflicting_guidance=[
-                                        ConflictingGuidance(content=chunk.content, source="new"),
-                                        ConflictingGuidance(content=conflicting_chunk.content, source="existing")
-                                    ]
-                                )
-                                all_conflicts.append(conflict)
-                        else:
-                            # No conflicts, safe to store
+                with time_operation("conflict_detection_external", timing_collector) as external_conflict_timing:
+                    for chunk in valid_chunks:
+                        try:
+                            conflicting_chunks = await knowledge_store.detect_conflicts(chunk)
+                            if conflicting_chunks:
+                                # Create conflict objects for user resolution
+                                for conflicting_chunk in conflicting_chunks:
+                                    conflict = Conflict(
+                                        description=f"Conflicting guidance detected between new content and existing content",
+                                        conflicting_guidance=[
+                                            ConflictingGuidance(content=chunk.content, source="new"),
+                                            ConflictingGuidance(content=conflicting_chunk.content, source="existing")
+                                        ]
+                                    )
+                                    all_conflicts.append(conflict)
+                            else:
+                                # No conflicts, safe to store
+                                chunks_to_store.append(chunk)
+                        except Exception as e:
+                            console.print(f"[yellow]Warning: Failed to check conflicts for chunk {chunk.id[:12]}...: {str(e)}[/yellow]")
+                            # If conflict detection fails, store the chunk anyway
                             chunks_to_store.append(chunk)
-                    except Exception as e:
-                        console.print(f"[yellow]Warning: Failed to check conflicts for chunk {chunk.id[:12]}...: {str(e)}[/yellow]")
-                        # If conflict detection fails, store the chunk anyway
-                        chunks_to_store.append(chunk)
+
+                console.print(f"[dim]🔍 External conflict detection completed in {format_duration(external_conflict_timing.duration_seconds)}[/dim]")
 
                 # Handle conflicts if any were detected
                 if all_conflicts:
                     console.print(f"\n[yellow]Detected {len(all_conflicts)} conflict(s) that require resolution[/yellow]")
-                    resolved_conflicts = resolve_conflicts(all_conflicts, console, resolver)
+                    with time_operation("conflict_resolution", timing_collector) as resolution_timing:
+                        resolved_conflicts = resolve_conflicts(all_conflicts, console, resolver)
 
-                    # Apply conflict resolutions to modify chunks appropriately
-                    chunks_to_store.extend(_apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_store, console))
+                        # Apply conflict resolutions to modify chunks appropriately
+                        chunks_to_store.extend(_apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_store, console))
+
+                    console.print(f"[dim]⚖️  Conflict resolution completed in {format_duration(resolution_timing.duration_seconds)}[/dim]")
                     console.print(f"[green]Conflicts resolved and applied. Proceeding with storage.[/green]")
                 else:
                     # No conflicts detected, store all remaining chunks
                     chunks_to_store.extend([chunk for chunk in valid_chunks if chunk not in chunks_to_store])
 
+                with time_operation("knowledge_store_operations", timing_collector) as store_timing:
+                    try:
+                        await knowledge_store.store_chunks(chunks_to_store)
+                        console.print(f"[green]Successfully stored {len(chunks_to_store)} chunks in vector knowledge store[/green]")
+                    except Exception as e:
+                        console.print(f"[red]Error: Failed to store chunks in vector store: {str(e)}[/red]")
+                        console.print("[red]This is a critical error - user input data could not be stored properly in the vector store![/red]")
+                        console.print("[yellow]Attempting fallback to context.md storage to preserve your data[/yellow]")
+
+                console.print(f"[dim]💾 Knowledge store operations completed in {format_duration(store_timing.duration_seconds)}[/dim]")
+
+                # Create a summary for context.md (for compatibility) using ALL chunks in the store
                 try:
-                    await knowledge_store.store_chunks(chunks_to_store)
-                    console.print(f"[green]Successfully stored {len(chunks_to_store)} chunks in vector knowledge store[/green]")
+                    all_chunks = await knowledge_store.get_all_chunks()
+                    summary_content = f"# Knowledge Store Contents\n\n"
+                    summary_content += f"Last updated: {chunking_engine._generate_chunk_id('', '')[:8]}\n"
+                    summary_content += f"Total chunks: {len(all_chunks)}\n\n"
+
+                    for i, chunk in enumerate(all_chunks, 1):
+                        summary_content += f"## Chunk {i}: {chunk.metadata.tags[0] if chunk.metadata.tags else 'Concept'}\n"
+                        summary_content += f"**Domain:** {', '.join(chunk.metadata.domains)}\n"
+                        summary_content += f"**Authority:** {chunk.metadata.authority.value}\n"
+                        summary_content += f"**ID:** {chunk.id}\n\n"
+                        summary_content += chunk.content + "\n\n---\n\n"
                 except Exception as e:
-                    console.print(f"[red]Error: Failed to store chunks in vector store: {str(e)}[/red]")
-                    console.print("[red]This is a critical error - user input data could not be stored properly in the vector store![/red]")
-                    console.print("[yellow]Attempting fallback to context.md storage to preserve your data[/yellow]")
+                    console.print(f"[yellow]Warning: Could not retrieve all chunks for context.md: {str(e)}[/yellow]")
+                    # Fallback to current ingestion chunks
+                    summary_content = f"# Ingested Content from {path}\n\n"
+                    summary_content += f"Processed on: {chunking_engine._generate_chunk_id('', '')[:8]}\n"
+                    summary_content += f"Total chunks: {len(chunks_to_store)}\n\n"
 
-                # Create a summary for context.md (for compatibility)
-                summary_content = f"# Ingested Content from {path}\n\n"
-                summary_content += f"Processed on: {chunking_engine._generate_chunk_id('', '')[:8]}\n"
-                summary_content += f"Total chunks: {len(chunks_to_store)}\n\n"
-
-                for i, chunk in enumerate(chunks_to_store, 1):
-                    summary_content += f"## Chunk {i}: {chunk.metadata.tags[0] if chunk.metadata.tags else 'Concept'}\n"
-                    summary_content += f"**Domain:** {', '.join(chunk.metadata.domains)}\n"
-                    summary_content += f"**Authority:** {chunk.metadata.authority.value}\n"
-                    summary_content += f"**ID:** {chunk.id}\n\n"
-                    summary_content += chunk.content + "\n\n---\n\n"
+                    for i, chunk in enumerate(chunks_to_store, 1):
+                        summary_content += f"## Chunk {i}: {chunk.metadata.tags[0] if chunk.metadata.tags else 'Concept'}\n"
+                        summary_content += f"**Domain:** {', '.join(chunk.metadata.domains)}\n"
+                        summary_content += f"**Authority:** {chunk.metadata.authority.value}\n"
+                        summary_content += f"**ID:** {chunk.id}\n\n"
+                        summary_content += chunk.content + "\n\n---\n\n"
 
                 output_file = config.library_path / DEFAULT_ROOT_CONTEXT_FILENAME
                 output_file.write_text(summary_content)
@@ -392,19 +584,42 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
         # Commit changes if requested
         if commit:
-            try:
-                git_gateway = GitGateway()
-                commit_operation = CommitOperation(git_gateway, llm_gateway)
+            with time_operation("git_commit", timing_collector) as commit_timing:
+                try:
+                    git_gateway = GitGateway()
+                    commit_operation = CommitOperation(git_gateway, llm_gateway)
 
-                # Commit the changes
-                success, message, commit_msg = commit_operation.commit_changes(config.library_path)
+                    # Commit the changes
+                    success, message, commit_msg = commit_operation.commit_changes(config.library_path)
 
-                if success:
-                    console.print(f"[green]Successfully committed changes: {commit_msg.short}[/green]")
-                else:
-                    console.print(f"[yellow]Failed to commit changes: {message}[/yellow]")
-            except Exception as e:
-                console.print(f"[yellow]Error during commit: {str(e)}[/yellow]")
+                    if success:
+                        console.print(f"[green]Successfully committed changes: {commit_msg.short}[/green]")
+                    else:
+                        console.print(f"[yellow]Failed to commit changes: {message}[/yellow]")
+                except Exception as e:
+                    console.print(f"[yellow]Error during commit: {str(e)}[/yellow]")
+
+            console.print(f"[dim]📝 Git commit completed in {format_duration(commit_timing.duration_seconds)}[/dim]")
+
+        # Display timing summary
+        total_time = timing_collector.get_total_duration()
+        console.print(f"\n[bold dim]⏱️  Performance Summary (Total: {format_duration(total_time)})[/bold dim]")
+
+        # Create timing summary table
+        timing_table = Table(title="Operation Timing Details", show_header=True, header_style="bold blue")
+        timing_table.add_column("Operation", style="cyan", width=25)
+        timing_table.add_column("Duration", style="yellow", justify="right", width=12)
+        timing_table.add_column("% of Total", style="dim", justify="right", width=10)
+
+        for result in timing_collector.results:
+            percentage = (result.duration_seconds / total_time * 100) if total_time > 0 else 0
+            timing_table.add_row(
+                result.operation_name.replace("_", " ").title(),
+                format_duration(result.duration_seconds),
+                f"{percentage:.1f}%"
+            )
+
+        console.print(timing_table)
 
     except Exception as e:
         console.print(f"[red]Error during ingestion: {str(e)}[/red]")
