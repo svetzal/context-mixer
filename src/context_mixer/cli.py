@@ -26,6 +26,8 @@ from context_mixer.commands.ingest import do_ingest, IngestCommand
 from context_mixer.commands.open import do_open
 from context_mixer.commands.slice import do_slice
 from context_mixer.commands.assemble import do_assemble
+from context_mixer.utils.progress import ProgressTracker
+from context_mixer.utils.cli_progress import CLIProgressObserver
 from context_mixer.commands.quarantine import (
     do_quarantine_list,
     do_quarantine_review,
@@ -253,6 +255,10 @@ def ingest(
     # Create and execute the ingest command with injected dependencies
     ingest_command = IngestCommand(knowledge_store)
 
+    # Create progress tracking for CLI
+    cli_progress_observer = CLIProgressObserver(console)
+    progress_tracker = ProgressTracker(cli_progress_observer)
+
     # Create command context with all necessary dependencies and parameters
     context = CommandContext(
         console=console,
@@ -262,7 +268,8 @@ def ingest(
         parameters={
             'path': path,
             'project_id': project_id,
-            'project_name': project_name
+            'project_name': project_name,
+            'progress_tracker': progress_tracker
         }
     )
 

@@ -17,6 +17,7 @@ from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
 from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
+from context_mixer.utils.progress import ProgressTracker, NoOpProgressObserver
 from .base import Command, CommandContext, CommandResult
 
 
@@ -67,7 +68,8 @@ class IngestCommand(Command):
                 commit=commit,
                 detect_boundaries=detect_boundaries,
                 resolver=resolver,
-                knowledge_store=self.knowledge_store
+                knowledge_store=self.knowledge_store,
+                progress_tracker=context.parameters.get('progress_tracker')
             )
 
             return CommandResult(
@@ -87,7 +89,7 @@ class IngestCommand(Command):
             )
 
 
-async def _read_files_parallel(file_paths: list[Path], input_path: Path, console) -> list[tuple[Path, str]]:
+async def _read_files_parallel(file_paths: list[Path], input_path: Path, console, progress_tracker: ProgressTracker) -> list[tuple[Path, str]]:
     """
     Read multiple files concurrently for better performance.
 
@@ -99,18 +101,27 @@ async def _read_files_parallel(file_paths: list[Path], input_path: Path, console
     Returns:
         List of tuples containing (file_path, file_content) for successfully read files
     """
+    completed_files = 0
+
     async def read_file(file_path: Path) -> tuple[Path, str | None]:
         """Read a single file asynchronously with error handling."""
+        nonlocal completed_files
         try:
             # Display progress for each file
             relative_name = file_path.relative_to(input_path) if input_path.is_dir() else file_path.name
-            console.print(f"[blue]Processing: {relative_name}[/blue]")
 
             # Use asyncio.to_thread to run the blocking read_text() in a thread pool
             content = await asyncio.to_thread(file_path.read_text)
+
+            # Update progress
+            completed_files += 1
+            progress_tracker.update_progress("file_reading", completed_files, f"Read {relative_name}")
+
             return file_path, content
         except Exception as e:
             console.print(f"[yellow]Warning: Could not read {file_path}: {str(e)}[/yellow]")
+            completed_files += 1
+            progress_tracker.update_progress("file_reading", completed_files, f"Failed to read {file_path.name}")
             return file_path, None
 
     # Create tasks for all files and run them concurrently
@@ -269,7 +280,7 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
     return chunks_to_add
 
 
-async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None):
+async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None, progress_tracker: ProgressTracker=None):
     """
     Ingest existing prompt artifacts into the library using intelligent chunking.
 
@@ -286,9 +297,15 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                  resolved automatically without user input.
         knowledge_store: Optional injected knowledge store. If not provided, will create
                         a vector store using the factory pattern.
+        progress_tracker: Optional progress tracker for showing progress indicators.
+                         If not provided, will use a no-op tracker.
     """
     # Disable tokenizer parallelism to avoid warnings when using async operations
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    # Initialize progress tracker if not provided
+    if progress_tracker is None:
+        progress_tracker = ProgressTracker(NoOpProgressObserver())
 
     # Initialize timing collector for performance monitoring
     timing_collector = TimingCollector()
@@ -321,7 +338,9 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
         # Read files in parallel for better performance
         with time_operation("file_reading", timing_collector) as file_timing:
-            file_contents = await _read_files_parallel(files_to_process, input_path, console)
+            progress_tracker.start_operation("file_reading", "Reading files", len(files_to_process))
+            file_contents = await _read_files_parallel(files_to_process, input_path, console, progress_tracker)
+            progress_tracker.complete_operation("file_reading")
 
         console.print(f"[dim]📁 File reading completed in {format_duration(file_timing.duration_seconds)}[/dim]")
 
@@ -360,6 +379,7 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
             chunking_engine = ChunkingEngine(llm_gateway)
             with time_operation("chunk_creation", timing_collector) as chunk_timing:
+                progress_tracker.start_operation("chunking", "Creating chunks", 1)
                 chunks = chunking_engine.chunk_by_structured_output(
                     ingest_content, 
                     source=str(path),
@@ -367,6 +387,7 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                     project_name=project_name,
                     project_path=determined_project_path
                 )
+                progress_tracker.complete_operation("chunking")
 
             console.print(f"[dim]🧩 Chunk creation completed in {format_duration(chunk_timing.duration_seconds)}[/dim]")
 
@@ -377,11 +398,14 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                     chunk_validations = []
                     valid_chunks = []
 
-                    for chunk in chunks:
+                    progress_tracker.start_operation("validation", "Validating chunks", len(chunks))
+                    for i, chunk in enumerate(chunks):
                         validation_result = chunking_engine.validate_chunk_completeness(chunk)
                         chunk_validations.append((chunk, validation_result))
                         if validation_result.is_complete:
                             valid_chunks.append(chunk)
+                        progress_tracker.update_progress("validation", i + 1, f"Validated chunk {i + 1}/{len(chunks)}")
+                    progress_tracker.complete_operation("validation")
 
                 console.print(f"[dim]✅ Chunk validation completed in {format_duration(validation_timing.duration_seconds)}[/dim]")
 
@@ -449,6 +473,7 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                             chunk_pairs.append((chunk1, chunk2))
 
                     if chunk_pairs:
+                        progress_tracker.start_operation("internal_conflicts", "Checking internal conflicts", len(chunk_pairs))
                         # Use batch conflict detection for improved performance
                         from context_mixer.commands.operations.merge import detect_conflicts_batch
 
@@ -493,12 +518,16 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                                 except Exception as inner_e:
                                     console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(inner_e)}[/yellow]")
 
+                    if chunk_pairs:
+                        progress_tracker.complete_operation("internal_conflicts")
+
                 console.print(f"[dim]🔍 Internal conflict detection completed in {format_duration(internal_conflict_timing.duration_seconds)}[/dim]")
 
                 # Then, check for conflicts with existing chunks in the knowledge store
                 console.print("[blue]Checking for conflicts with existing content...[/blue]")
                 with time_operation("conflict_detection_external", timing_collector) as external_conflict_timing:
-                    for chunk in valid_chunks:
+                    progress_tracker.start_operation("external_conflicts", "Checking external conflicts", len(valid_chunks))
+                    for i, chunk in enumerate(valid_chunks):
                         try:
                             conflicting_chunks = await knowledge_store.detect_conflicts(chunk)
                             if conflicting_chunks:
@@ -519,6 +548,10 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                             console.print(f"[yellow]Warning: Failed to check conflicts for chunk {chunk.id[:12]}...: {str(e)}[/yellow]")
                             # If conflict detection fails, store the chunk anyway
                             chunks_to_store.append(chunk)
+
+                        progress_tracker.update_progress("external_conflicts", i + 1, f"Checked chunk {i + 1}/{len(valid_chunks)}")
+
+                    progress_tracker.complete_operation("external_conflicts")
 
                 console.print(f"[dim]🔍 External conflict detection completed in {format_duration(external_conflict_timing.duration_seconds)}[/dim]")
 
