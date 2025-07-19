@@ -87,6 +87,7 @@ class UserInteractiveResolutionStrategy(ConflictResolutionStrategy):
         for i, guidance in enumerate(conflict.conflicting_guidance):
             console.print(f"{i + 1}. Choose the guidance from {guidance.source}")
         console.print(f"{len(conflict.conflicting_guidance) + 1}. Enter your own resolution")
+        console.print(f"{len(conflict.conflicting_guidance) + 2}. This is not a conflict")
 
         # Ask the user to choose an option
         while True:
@@ -99,7 +100,11 @@ class UserInteractiveResolutionStrategy(ConflictResolutionStrategy):
                     break
                 elif choice_idx == len(conflict.conflicting_guidance):
                     # User wants to enter their own resolution
-                    resolution = console.input("\n[bold]Enter your custom resolution:[/bold] ")
+                    resolution = self._get_multiline_input(console)
+                    break
+                elif choice_idx == len(conflict.conflicting_guidance) + 1:
+                    # User indicates this is not a conflict
+                    resolution = None
                     break
                 else:
                     console.print("[red]Invalid choice. Please enter a valid number.[/red]")
@@ -112,6 +117,27 @@ class UserInteractiveResolutionStrategy(ConflictResolutionStrategy):
             conflicting_guidance=conflict.conflicting_guidance,
             resolution=resolution
         )
+
+    def _get_multiline_input(self, console: Console) -> str:
+        """
+        Get multi-line input from the user, terminated by a single '.' on a line by itself.
+
+        Args:
+            console: Console for user interaction
+
+        Returns:
+            The multi-line input as a single string with newlines preserved
+        """
+        console.print("\n[bold]Enter your custom resolution (end with a single '.' on a line by itself):[/bold]")
+        lines = []
+
+        while True:
+            line = console.input("")
+            if line.strip() == ".":
+                break
+            lines.append(line)
+
+        return "\n".join(lines)
 
     def get_strategy_name(self) -> str:
         """Return the name of this strategy."""

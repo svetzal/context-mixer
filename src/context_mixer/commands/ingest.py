@@ -482,8 +482,13 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                         console.print(f"[dim]Processing {len(chunk_pairs)} chunk pairs in batches of {batch_size}[/dim]")
 
                         try:
-                            batch_results = await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size)
+                            # Create progress callback to update progress as batches complete
+                            def progress_callback(completed_count):
+                                progress_tracker.update_progress("internal_conflicts", completed_count, f"Checked pair {completed_count}/{len(chunk_pairs)}")
 
+                            batch_results = await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size, progress_callback)
+
+                            # Process results and handle conflicts
                             for chunk1, chunk2, conflicts in batch_results:
                                 if conflicts.list:
                                     console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
@@ -500,7 +505,8 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                         except Exception as e:
                             console.print(f"[yellow]Warning: Batch conflict detection failed, falling back to sequential processing: {str(e)}[/yellow]")
                             # Fallback to sequential processing if batch processing fails
-                            for chunk1, chunk2 in chunk_pairs:
+                            for i, (chunk1, chunk2) in enumerate(chunk_pairs):
+                                progress_tracker.update_progress("internal_conflicts", i + 1, f"Checked pair {i + 1}/{len(chunk_pairs)}")
                                 try:
                                     from context_mixer.commands.operations.merge import detect_conflicts
                                     conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)

@@ -68,7 +68,8 @@ async def detect_conflicts_async(existing_content: str,
 
 async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, KnowledgeChunk]], 
                                 llm_gateway: LLMGateway,
-                                batch_size: int = 5) -> List[Tuple[KnowledgeChunk, KnowledgeChunk, ConflictList]]:
+                                batch_size: int = 5,
+                                progress_callback=None) -> List[Tuple[KnowledgeChunk, KnowledgeChunk, ConflictList]]:
     """
     Detect conflicts between multiple chunk pairs in parallel batches.
 
@@ -79,6 +80,7 @@ async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, Knowled
         chunk_pairs: List of tuples containing pairs of chunks to check for conflicts
         llm_gateway: The LLM gateway to use for detecting conflicts
         batch_size: Number of conflict detections to process concurrently (default: 5)
+        progress_callback: Optional callback function to report progress as batches complete
 
     Returns:
         List of tuples containing (chunk1, chunk2, conflicts) for each pair
@@ -119,6 +121,10 @@ async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, Knowled
                 batch_results.append((chunk1, chunk2, empty_conflicts))
 
         results.extend(batch_results)
+
+        # Call progress callback if provided
+        if progress_callback:
+            progress_callback(len(results))
 
     return results
 
