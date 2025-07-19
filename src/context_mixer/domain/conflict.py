@@ -14,7 +14,7 @@ class ConflictingGuidance(BaseModel):
         contexts: Contexts where this guidance applies
         confidence: Confidence in context detection (0.0-1.0)
     """
-    content: str = Field(..., description="The content of the guidance", max_length=1000)
+    content: str = Field(..., description="The content of the guidance", max_length=2000)
     source: str = Field(..., description="The source of the guidance (e.g., 'existing' or 'new')")
     contexts: List[Context] = Field(default_factory=list, description="Contexts where this guidance applies")
     confidence: Optional[float] = Field(None, description="Confidence in context detection (0.0-1.0)", ge=0.0, le=1.0)
