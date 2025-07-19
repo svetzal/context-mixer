@@ -126,15 +126,26 @@ async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, Knowled
             task = detect_conflicts_async(chunk1.content, chunk2.content, llm_gateway)
             tasks.append((chunk1, chunk2, task))
 
-        # Execute all tasks in this batch concurrently
-        batch_results = []
-        for chunk1, chunk2, task in tasks:
-            try:
-                conflicts = await task
-                batch_results.append((chunk1, chunk2, conflicts))
-            except Exception as e:
-                # If conflict detection fails for a pair, create an empty conflict list
-                # and let the calling code handle the error appropriately
+        # Execute all tasks in this batch concurrently using asyncio.gather
+        task_list = [task for _, _, task in tasks]
+        try:
+            # Run all tasks concurrently and wait for all to complete
+            conflict_results = await asyncio.gather(*task_list, return_exceptions=True)
+
+            # Build batch results, handling any exceptions
+            batch_results = []
+            for i, (chunk1, chunk2, _) in enumerate(tasks):
+                result = conflict_results[i]
+                if isinstance(result, Exception):
+                    # If conflict detection fails for a pair, create an empty conflict list
+                    empty_conflicts = ConflictList(list=[])
+                    batch_results.append((chunk1, chunk2, empty_conflicts))
+                else:
+                    batch_results.append((chunk1, chunk2, result))
+        except Exception as e:
+            # Fallback: if gather fails entirely, create empty results for all tasks
+            batch_results = []
+            for chunk1, chunk2, _ in tasks:
                 empty_conflicts = ConflictList(list=[])
                 batch_results.append((chunk1, chunk2, empty_conflicts))
 
