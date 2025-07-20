@@ -1,460 +1,335 @@
-# PLAN.md: Aligning Context-Mixer with CRAFT Theory
+# Context Mixer Development Plan
 
 ## Executive Summary
 
-This plan transforms Context-Mixer from a basic prompt fragment manager into a sophisticated knowledge management system based on the CRAFT theory (Chunk, Resist, Adapt, Fit, Transcend). The roadmap progresses through four major phases, culminating in Model Context Protocol (MCP) resource server capabilities for just-in-time agent context delivery.
+Context Mixer has achieved significant architectural maturity with the completion of foundational systems including CRAFT domain models, Command pattern implementation, Event-driven architecture, Vector storage infrastructure, Context-aware conflict detection, and Strategy pattern for conflict resolution. 
 
-**Key Goals:**
-- Apply CRAFT principles to create a robust knowledge curation and assembly system
-- Evolve from simple prompt mixing to intelligent knowledge orchestration
-- Support both ahead-of-time (CLI) and just-in-time (MCP) context delivery
-- Maintain backward compatibility while introducing advanced knowledge management features
-
----
+This updated plan focuses on the remaining high-impact features needed to complete the vision of a sophisticated knowledge management system with Model Context Protocol (MCP) integration for just-in-time agent context delivery.
 
 ## Current State Analysis
 
-**Existing Strengths:**
-- CLI foundation with Typer and rich output
-- Git-based storage for version control and collaboration
-- LLM integration through mojentic library
-- Basic ingest and slice functionality
-- Domain models for conflicts and commit messages
-- Gateway pattern for I/O isolation
+### ✅ Major Achievements Completed
 
-**MAJOR PROGRESS ACHIEVED:**
-- ✓ **Complete CRAFT Domain Models**: KnowledgeChunk, ChunkMetadata, AuthorityLevel, GranularityLevel, TemporalScope, ProvenanceInfo
-- ✓ **Vector Storage Infrastructure**: Full ChromaDB integration with ChromaGateway and ChromaAdapter
-- ✓ **Knowledge Store Architecture**: Abstract KnowledgeStore interface with VectorKnowledgeStore implementation
-- ✓ **Conflict Detection System**: Semantic conflict detection using embeddings, authority-based resolution
-- ✓ **Search Capabilities**: Semantic search, hybrid vector-keyword search, metadata filtering
-- ✓ **CLI Commands**: Basic init, ingest, slice, open commands implemented
-- ✓ **Testing Infrastructure**: Comprehensive test suites with spec files co-located with implementation
+**Foundation & Architecture (COMPLETED)**
+- ✅ **CRAFT Domain Models**: Complete KnowledgeChunk, ChunkMetadata, AuthorityLevel, GranularityLevel, TemporalScope, ProvenanceInfo implementation
+- ✅ **Command Pattern**: All CLI commands implement Command interface with CommandContext and CommandResult
+- ✅ **Vector Storage Infrastructure**: Full ChromaDB integration with ChromaGateway, ChromaAdapter, and connection pooling
+- ✅ **Knowledge Store Architecture**: Abstract KnowledgeStore interface with VectorKnowledgeStore implementation
+- ✅ **Conflict Detection System**: Semantic conflict detection using embeddings with authority-based resolution
+- ✅ **Search Capabilities**: Semantic search, hybrid vector-keyword search, metadata filtering
+- ✅ **Event-Driven Architecture**: Comprehensive event system with EventBus and domain events
+- ✅ **Strategy Pattern for Conflict Resolution**: Multiple resolution strategies with runtime selection
+- ✅ **Enhanced Contextual Awareness**: Multi-type context detection (architectural, platform, environment, language)
+- ✅ **Project Context Isolation**: Project-aware knowledge management with cross-project contamination prevention
+- ✅ **Performance Optimizations**: Parallel file reading, batch LLM operations, connection pooling, parallel validation
 
-**CRAFT Alignment Gaps:**
-- **Chunking**: ✓ Authority hierarchies implemented, semantic boundary detection partially complete
-- **Resistance**: ✓ Conflict detection and temporal versioning implemented, quarantine system pending
-- **Adaptation**: No granularity selection or context-aware detail levels
-- **Fitting**: No task-type routing or domain filtering beyond basic metadata
-- **Transcendence**: ✓ Storage-agnostic interfaces implemented, knowledge synthesis pending
+### 🎯 Current Capabilities
+- CLI foundation with init, ingest, slice, assemble, open commands
+- Semantic conflict detection with context-aware resolution
+- Vector-based knowledge storage and retrieval
+- Project-scoped knowledge management
+- Authority-based conflict resolution
+- Event-driven component communication
+- Comprehensive test coverage (65%+ with 429+ tests passing)
 
-**CRITICAL GAP: Project Context Isolation** ✅ **RESOLVED**
-- ✅ **Project identification implemented** during ingestion - knowledge organized by project
-- ✅ **Project-scoped retrieval implemented** - can filter knowledge by source project
-- ✅ **Context selection implemented** - users can choose which project contexts to include
-- ✅ **Cross-project contamination prevention** - guidance from different projects properly isolated
+## Phase 1: Performance & Quality Enhancements (Months 1-2)
 
-**Remaining Technical Debt:**
-- ~~Inconsistent naming (prompt-mixer vs context-mixer)~~ (RESOLVED)
-- ~~Simple flat-file taxonomy without rich metadata~~ (RESOLVED)
-- ~~No vector embeddings or semantic search~~ (RESOLVED)
-- ~~Limited knowledge relationships and dependencies~~ (RESOLVED)
-- ~~**Project context tracking and isolation**~~ (RESOLVED)
-- No MCP integration for agent-facing APIs
-- Advanced CLI features and granularity selection pending
+### 1.1 Advanced Caching System
+**Priority**: High - Performance Impact  
+**Story Points**: 13
 
----
+**Implementation**:
+- LRU cache for chunk retrieval with configurable size and TTL
+- Cache embeddings and search results
+- Implement cache invalidation strategy
+- Cache hit rate monitoring and analytics
 
-## PHASE 1: Foundation Alignment (Months 1-3)
+**Acceptance Criteria**:
+- [ ] LRU cache for chunk data with configurable parameters
+- [ ] Embedding and search result caching
+- [ ] Cache hit rate monitoring and reporting
+- [ ] Proper cache invalidation on knowledge updates
+- [ ] Performance improvement metrics (target: 50%+ faster retrieval)
 
-### 1.1 Core Infrastructure Modernization
+### 1.2 Performance Monitoring & Observability
+**Priority**: High - System Reliability  
+**Story Points**: 13
 
-**Domain Models Enhancement** ✓
-```python
-# New knowledge chunk model implementing CRAFT principles
-class KnowledgeChunk(BaseModel):
-    id: str = Field(..., description="Unique identifier")
-    content: str = Field(..., description="The actual knowledge content")
-    metadata: ChunkMetadata
-    embedding: Optional[List[float]] = Field(None, description="Vector embedding for semantic search")
+**Implementation**:
+- Comprehensive performance metrics collection
+- Enhanced timing decorators beyond basic utilities
+- Performance dashboard and alerting
+- Query performance analytics
 
-class ChunkMetadata(BaseModel):
-    domains: List[str] = Field(..., description="Knowledge domains (technical, business, design)")
-    authority: AuthorityLevel = Field(..., description="Authority level of this knowledge")
-    scope: List[str] = Field(..., description="Applicable scopes (enterprise, prototype, etc.)")
-    granularity: GranularityLevel = Field(..., description="Detail level")
-    temporal: TemporalScope = Field(..., description="When this knowledge is valid")
-    dependencies: List[str] = Field(default_factory=list, description="Required prerequisite chunks")
-    conflicts: List[str] = Field(default_factory=list, description="Chunks this conflicts with")
-    tags: List[str] = Field(default_factory=list, description="Searchable tags")
-    provenance: ProvenanceInfo = Field(..., description="Source and history tracking")
+**Acceptance Criteria**:
+- [ ] Key operations timed and logged with detailed metrics
+- [ ] Performance metrics exported to monitoring systems
+- [ ] Performance regression detection and alerting
+- [ ] Configurable monitoring levels (debug, info, warn, error)
+- [ ] Query performance analytics and optimization recommendations
 
-class ProvenanceInfo(BaseModel):
-    source: str = Field(..., description="Original source file path")
-    project_id: Optional[str] = Field(None, description="Project identifier")
-    project_name: Optional[str] = Field(None, description="Human-readable project name")
-    project_path: Optional[str] = Field(None, description="Root path of the source project")
-    created_at: str = Field(..., description="When this knowledge was created")
-    updated_at: Optional[str] = Field(None, description="When this knowledge was last updated")
-    author: Optional[str] = Field(None, description="Who created or last modified this knowledge")
-```
+### 1.3 Integration Test Framework
+**Priority**: High - System Reliability  
+**Story Points**: 21
 
-**Knowledge Storage Architecture** ✓
-- ✓ Implement `KnowledgeStore` interface with file-based and future vector backends
-- Add semantic boundary detection for intelligent chunking
-- ✓ Create knowledge graph relationships between chunks
-- ✓ Implement authority hierarchy and conflict resolution
+**Implementation**:
+- End-to-end integration test framework
+- Test fixtures for common scenarios
+- Performance benchmarking in tests
+- CI/CD integration with quality gates
 
-### 1.2 Enhanced Chunking (CRAFT-C)
+**Acceptance Criteria**:
+- [ ] Integration tests for key workflows (ingest → search → assemble)
+- [ ] Automated test data setup and teardown
+- [ ] Performance benchmarking integrated into test suite
+- [ ] CI/CD pipeline integration with quality gates
+- [ ] Test coverage improvement to 90%+
 
-**Semantic Boundary Detection**
-- Replace arbitrary character/token chunking with concept-based boundaries
-- Detect complete procedures, examples, and conceptual units
-- Implement overlap elimination to prevent information duplication
-- Add chunk completeness validation
-
-**Authority and Provenance Tracking**
-- Track knowledge source (official docs, team conventions, experiments)
-- Implement authority levels: Foundational → Official → Conventional → Experimental → Deprecated
-- Add temporal versioning for knowledge evolution
-- Create audit trails for all knowledge changes
-
-**Implementation Tasks:**
-- ✓ Create `ChunkingEngine` with semantic boundary detection
-- ✓ Implement `AuthorityResolver` for conflict resolution
-- ✓ Add `ProvenanceTracker` for knowledge source tracking
-- ✓ Create validation pipeline for chunk completeness
-- [ ] Build migration tool from existing flat-file fragments
-
-### 1.4 Project Context Isolation (CRAFT-C Enhancement)
-
-**Project-Aware Knowledge Management**
-- Extend domain models to include project identification and context
-- Implement project-scoped ingestion with automatic project detection
-- Create project-aware knowledge retrieval and filtering
-- Build context selection capabilities for multi-project scenarios
-
-**Project Boundary Detection**
-- Automatic project identification from file paths and repository structure
-- Project metadata extraction (name, type, technology stack)
-- Project relationship modeling (dependencies, shared components)
-- Cross-project knowledge conflict detection and resolution
-
-**Implementation Tasks:**
-- ✓ Enhance `ProvenanceInfo` with project context fields (project_id, project_name, project_path)
-- ✓ Update `ChunkingEngine` to accept project identification parameters
-- ✓ Extend `SearchQuery` to support project filtering (project_ids, exclude_projects)
-- [ ] Implement `ProjectDetector` for automatic project identification
-- [ ] Create `ProjectContextManager` for project-scoped operations
-- ✓ Add project-aware conflict detection to prevent cross-project contamination
-
-### 1.3 Knowledge Resistance (CRAFT-R)
-
-**Conflict Detection and Resolution** ✓
-- ✓ Implement semantic conflict detection using embeddings
-- ✓ Create temporal conflict detection for versioning issues
-- ✓ Build authority-based conflict resolution
-- Add knowledge quarantine system for unresolved conflicts
-
-**Immutable Knowledge History**
-- ✓ Implement append-only knowledge storage
-- ✓ Add rollback capabilities for contaminated ingestion
-- ✓ Create knowledge versioning with clear deprecation paths
-- ✓ Build validation pipelines for knowledge consistency
-
-**Implementation Tasks:**
-- ✓ Create `ConflictDetector` interface with multiple implementations
-- ✓ Implement `TemporalVersioningSystem` for knowledge evolution
-- [ ] Build `KnowledgeQuarantine` for conflict isolation
-- ✓ Add automated knowledge consistency testing
-- ✓ Create knowledge rollback and recovery mechanisms
-
----
-
-## PHASE 2: Intelligence Layer (Months 4-6)
+## Phase 2: Advanced Knowledge Management (Months 3-4)
 
 ### 2.1 Adaptive Granularity (CRAFT-A)
+**Priority**: Medium - User Experience  
+**Story Points**: 21
 
-**Multi-Resolution Knowledge Storage**
-- Store same concepts at multiple detail levels (summary, overview, detailed, comprehensive)
-- Implement progressive disclosure patterns
-- Create context-aware granularity selection
-- Build token budget optimization
+**Implementation**:
+- Multi-resolution knowledge storage (summary, overview, detailed, comprehensive)
+- Progressive disclosure patterns
+- Context-aware granularity selection
+- Token budget optimization
 
-**Dynamic Context Window Management**
-- Implement token budget allocation across granularity levels
-- Create compression algorithms for context overflow
-- Build swapping strategies for relevance optimization
-- Add real-time adaptation based on user feedback
-
-**Implementation Tasks:**
-- [ ] Create `MultiResolutionChunk` storage format
-- [ ] Implement `GranularitySelector` for optimal detail level selection
-- [ ] Build `ContextWindowManager` for token budget optimization
-- [ ] Add `AdaptationEngine` for real-time granularity adjustment
-- [ ] Create granularity-aware caching system
+**Acceptance Criteria**:
+- [ ] Multi-resolution chunk storage format
+- [ ] Granularity selector for optimal detail level
+- [ ] Context window manager for token budget optimization
+- [ ] Adaptation engine for real-time granularity adjustment
+- [ ] Granularity-aware caching system
 
 ### 2.2 Precise Knowledge Fitting (CRAFT-F)
+**Priority**: Medium - Knowledge Quality  
+**Story Points**: 21
 
-**Query Analysis and Intent Recognition**
-- Implement semantic query analysis using NLP
-- Add task type inference (debug, develop, optimize, explain)
-- Create complexity and scope assessment
-- Build technology stack detection
+**Implementation**:
+- Semantic query analysis using NLP
+- Task type inference (debug, develop, optimize, explain)
+- Multi-factor relevance engine
+- Configurable filtering pipelines
 
-**Relevance Scoring and Filtering**
-- Implement multi-factor relevance engine
-- Create domain, scope, temporal, and authority scoring
-- Build configurable filtering pipelines
-- Add dynamic filter adaptation
+**Acceptance Criteria**:
+- [ ] Query analyzer with NLP pipeline
+- [ ] Relevance engine with domain, scope, temporal, and authority scoring
+- [ ] Filtering pipeline with pluggable filters
+- [ ] Task type classifier for intent recognition
+- [ ] Sub-100ms filtering performance optimization
 
-**Implementation Tasks:**
-- [ ] Create `QueryAnalyzer` with NLP pipeline
-- [ ] Implement `RelevanceEngine` with multiple scoring factors
-- [ ] Build `FilteringPipeline` with pluggable filters
-- [ ] Add `TaskTypeClassifier` for intent recognition
-- [ ] Create performance optimization for sub-100ms filtering
+### 2.3 Knowledge Quarantine System
+**Priority**: Medium - Knowledge Quality  
+**Story Points**: 13
 
-### 2.3 Vector Search and Embeddings ✓
+**Implementation**:
+- Quarantine system for unresolved conflicts
+- Conflict isolation and review workflows
+- Automated quarantine resolution where possible
+- Quarantine analytics and reporting
 
-**Semantic Search Infrastructure** ✓
-- ✓ Integrate vector database (Pinecone, Weaviate, or local alternatives) - ChromaDB implemented
-- ✓ Implement semantic similarity search
-- ✓ Create hybrid vector-keyword search
-- ✓ Add embedding generation and management
+**Acceptance Criteria**:
+- [ ] Knowledge quarantine for conflict isolation
+- [ ] Review workflows for quarantined knowledge
+- [ ] Automated resolution of simple conflicts
+- [ ] Quarantine analytics and reporting dashboard
+- [ ] Integration with existing conflict resolution strategies
 
-**Performance Optimization**
-- ✓ Implement caching strategies for common queries
-- ✓ Create pre-computed embeddings for all chunks
-- ✓ Build efficient indexing for domain/scope filtering
-- Add lazy loading for large knowledge bases
-
-**Implementation Tasks:**
-- ✓ Integrate vector database backend - ChromaDB with ChromaGateway and ChromaAdapter
-- ✓ Implement `SemanticSearchEngine` - VectorKnowledgeStore
-- ✓ Create `EmbeddingManager` for vector operations - ChromaAdapter handles embeddings
-- ✓ Build hybrid search combining vector and metadata filtering
-- ✓ Add performance monitoring and optimization - Collection stats implemented
-
-### 2.4 Enhanced Contextual Awareness ✓
-
-**Multi-Context Detection System** ✓
-- ✓ Implement architectural context detection (gateway, service, repository, controller)
-- ✓ Add platform context detection (web, mobile, desktop, server, cloud)
-- ✓ Create environment context detection (development, staging, production)
-- ✓ Build language context detection (Python, JavaScript, Java, etc.)
-- ✓ Implement context-aware conflict detection and resolution
-
-**Advanced Context Features** (Future Enhancements)
-- [ ] Add CLI commands for context specification during ingestion and resolution
-- [ ] Implement interactive context resolution with user override capabilities
-- [ ] Create context persistence and learning from user corrections
-- [ ] Build machine learning for context detection improvement
-- [ ] Add context pattern recognition and suggestions
-- [ ] Implement team-specific context profiles
-- [ ] Create integration with external context sources (project configs, team wikis)
-
-**Context-Aware CLI Commands** (Future)
-```bash
-# Context specification during conflict resolution
-cmx ingest --context "architectural:gateway" --context "environment:production" file.md
-cmx resolve-conflicts --add-context "platform:web" --add-context "team:backend"
-cmx contexts list  # List available context types
-cmx contexts add-type "deployment" "Deployment-specific rules"  # Add custom context type
-```
-
-**Implementation Tasks:**
-- ✓ Create `Context`, `ContextType`, `ContextAnalysis` domain models
-- ✓ Implement `ContextDetector` interface with specific implementations
-- ✓ Build `ContextDetectionEngine` for coordinating multiple detectors
-- ✓ Create `ContextAwarePromptBuilder` for dynamic conflict detection prompts
-- ✓ Implement `ContextAwareResolutionStrategy` for auto-resolution
-- [ ] Add CLI commands for context specification and management
-- [ ] Build interactive context resolution UI
-- [ ] Implement context persistence and learning capabilities
-- [ ] Create machine learning pipeline for context detection improvement
-
----
-
-## PHASE 3: Cross-Domain Synthesis (Months 7-9)
+## Phase 3: Cross-Domain Synthesis (Months 5-6)
 
 ### 3.1 Knowledge Transcendence (CRAFT-T)
+**Priority**: Medium - Architecture  
+**Story Points**: 21
 
-**Storage-Agnostic Interfaces**
-- Create abstract `KnowledgeDomain` interfaces
-- Implement storage backend adapters (file, vector, graph)
-- Build knowledge orchestration layer
-- Add migration support between storage systems
+**Implementation**:
+- Storage-agnostic interfaces for multiple backends
+- Cross-domain synthesis engine
+- Knowledge combination algorithms
+- Provenance preservation for synthesized knowledge
 
-**Cross-Domain Synthesis Engine**
-- Implement knowledge combination algorithms
-- Create conflict resolution strategies
-- Build coherent guidance generation
-- Add provenance preservation for synthesized knowledge
-
-**Implementation Tasks:**
-- [ ] Create `KnowledgeDomain` abstract interfaces
-- [ ] Implement storage backend adapters
-- [ ] Build `KnowledgeOrchestrator` for cross-domain queries
-- [ ] Create `SynthesisEngine` for knowledge combination
-- [ ] Add zero-downtime storage migration support
+**Acceptance Criteria**:
+- [ ] Abstract KnowledgeDomain interfaces
+- [ ] Storage backend adapters (file, vector, graph)
+- [ ] Knowledge orchestrator for cross-domain queries
+- [ ] Synthesis engine for knowledge combination
+- [ ] Zero-downtime storage migration support
 
 ### 3.2 Knowledge Graph Integration
+**Priority**: Medium - Advanced Features  
+**Story Points**: 34
 
-**Relationship Modeling**
-- Implement knowledge graph for complex relationships
-- Create relationship types (depends_on, conflicts_with, implements, extends)
-- Build graph traversal for dependency discovery
-- Add relationship-aware ranking
+**Implementation**:
+- Knowledge graph for complex relationships
+- Relationship types (depends_on, conflicts_with, implements, extends)
+- Graph traversal for dependency discovery
+- Hybrid vector-graph architecture
 
-**Hybrid Vector-Graph Architecture**
-- Combine vector similarity with graph relationships
-- Implement intelligent knowledge network traversal
-- Create relationship-aware context assembly
-- Add knowledge gap detection
-
-**Implementation Tasks:**
-- [ ] Integrate graph database (Neo4j or similar)
-- [ ] Implement `KnowledgeGraph` with relationship modeling
-- [ ] Create `HybridKnowledgeStore` combining vector and graph
-- [ ] Build relationship-aware retrieval algorithms
-- [ ] Add knowledge dependency validation
+**Acceptance Criteria**:
+- [ ] Graph database integration (Neo4j or similar)
+- [ ] Knowledge graph with relationship modeling
+- [ ] Hybrid knowledge store combining vector and graph
+- [ ] Relationship-aware retrieval algorithms
+- [ ] Knowledge dependency validation
 
 ### 3.3 Advanced Context Assembly
+**Priority**: Medium - Performance  
+**Story Points**: 21
 
-**Intelligent Knowledge Selection**
-- Implement context budget optimization
-- Create diversity-aware selection algorithms
-- Build authority-weighted ranking
-- Add redundancy elimination
+**Implementation**:
+- Context budget optimization
+- Diversity-aware selection algorithms
+- Authority-weighted ranking
+- Redundancy elimination
 
-**Quality Assurance**
-- Create automated knowledge validation
-- Implement cross-reference checking
-- Build staleness detection
-- Add retrieval analytics and optimization
+**Acceptance Criteria**:
+- [ ] Context budget optimizer with multi-objective optimization
+- [ ] Knowledge quality validator
+- [ ] Staleness detector for outdated knowledge
+- [ ] Comprehensive knowledge validation pipeline
+- [ ] Retrieval analytics and monitoring
 
-**Implementation Tasks:**
-- [ ] Create `ContextBudgetOptimizer` with multi-objective optimization
-- [ ] Implement `KnowledgeQualityValidator`
-- [ ] Build `StalenessDetector` for outdated knowledge
-- [ ] Add comprehensive knowledge validation pipeline
-- [ ] Create retrieval analytics and monitoring
-
----
-
-## PHASE 4: MCP Integration and Agent APIs (Months 10-12)
+## Phase 4: MCP Integration & Agent APIs (Months 7-9)
 
 ### 4.1 Model Context Protocol Server
+**Priority**: High - Strategic  
+**Story Points**: 34
 
-**MCP Resource Server Implementation**
-- Implement MCP protocol for agent integration
-- Create just-in-time knowledge delivery
-- Build agent-facing APIs for context requests
-- Add real-time knowledge assembly
+**Implementation**:
+- MCP protocol implementation for agent integration
+- Just-in-time knowledge delivery
+- Agent-facing APIs for context requests
+- Real-time knowledge assembly
 
-**Protocol Compliance**
-- Follow MCP specification for resource servers
-- Implement proper authentication and authorization
-- Create robust error handling and fallbacks
-- Add comprehensive logging and monitoring
-
-**Implementation Tasks:**
-- [ ] Implement MCP resource server protocol
-- [ ] Create agent-facing knowledge APIs
-- [ ] Build real-time context assembly pipeline
-- [ ] Add MCP authentication and security
-- [ ] Create comprehensive API documentation
+**Acceptance Criteria**:
+- [ ] MCP resource server protocol implementation
+- [ ] Agent-facing knowledge APIs
+- [ ] Real-time context assembly pipeline (sub-100ms)
+- [ ] MCP authentication and security
+- [ ] Comprehensive API documentation
 
 ### 4.2 Just-in-Time Context Delivery
+**Priority**: High - Strategic  
+**Story Points**: 21
 
-**Real-Time Knowledge Assembly**
-- Implement sub-second context assembly for agent requests
-- Create streaming responses for large knowledge sets
-- Build adaptive quality degradation for performance
-- Add intelligent caching for common patterns
+**Implementation**:
+- Sub-second context assembly for agent requests
+- Streaming responses for large knowledge sets
+- Adaptive quality degradation for performance
+- Intelligent caching for common patterns
 
-**Agent Integration Patterns**
-- Support multiple agent frameworks (LangChain, AutoGPT, etc.)
-- Create standardized knowledge request formats
-- Build feedback loops for knowledge quality improvement
-- Add usage analytics for optimization
+**Acceptance Criteria**:
+- [ ] Real-time context assembly engine
+- [ ] Streaming knowledge delivery
+- [ ] Agent integration SDKs
+- [ ] Performance monitoring and optimization
+- [ ] Feedback collection and analysis
 
-**Implementation Tasks:**
-- [ ] Create real-time context assembly engine
-- [ ] Implement streaming knowledge delivery
-- [ ] Build agent integration SDKs
-- [ ] Add performance monitoring and optimization
-- [ ] Create feedback collection and analysis
+### 4.3 Enterprise Features
+**Priority**: Medium - Business Value  
+**Story Points**: 21
 
-### 4.3 Advanced Features and Optimization
-
-**Knowledge Learning and Adaptation**
-- Implement usage pattern analysis
-- Create automatic knowledge clustering
-- Build quality feedback loops
-- Add self-improving knowledge organization
-
-**Enterprise Features**
+**Implementation**:
 - Multi-tenant knowledge isolation
 - Role-based access control
 - Knowledge audit trails
 - Compliance and governance features
 
-**Implementation Tasks:**
-- [ ] Implement knowledge usage analytics
-- [ ] Create automatic knowledge optimization
-- [ ] Build enterprise security features
-- [ ] Add compliance and audit capabilities
-- [ ] Create comprehensive monitoring and alerting
+**Acceptance Criteria**:
+- [ ] Multi-tenant architecture with data isolation
+- [ ] Role-based access control system
+- [ ] Comprehensive audit trails
+- [ ] Compliance reporting and governance workflows
+- [ ] Enterprise security features
 
----
+## Phase 5: Advanced Features & Optimization (Months 10-12)
 
-## Feature Roadmap
+### 5.1 Architecture Documentation
+**Priority**: Medium - Maintainability  
+**Story Points**: 8
 
-### CLI Commands Evolution
+**Implementation**:
+- Architecture decision records (ADRs)
+- Updated sequence diagrams
+- Developer onboarding guide
+- Code examples for new patterns
 
-**Enhanced Existing Commands:** (Partially Implemented)
+**Acceptance Criteria**:
+- [ ] Complete ADR documentation
+- [ ] Updated sequence diagrams for key flows
+- [ ] Comprehensive developer onboarding guide
+- [ ] Code examples and tutorials for new patterns
+
+### 5.2 Knowledge Learning and Adaptation
+**Priority**: Low - Advanced Features  
+**Story Points**: 21
+
+**Implementation**:
+- Usage pattern analysis
+- Automatic knowledge clustering
+- Quality feedback loops
+- Self-improving knowledge organization
+
+**Acceptance Criteria**:
+- [ ] Knowledge usage analytics
+- [ ] Automatic knowledge optimization
+- [ ] Quality feedback collection and analysis
+- [ ] Self-improving knowledge organization algorithms
+
+### 5.3 Lower Priority Optimizations
+**Priority**: Low - Performance  
+**Story Points**: 8
+
+**Batch Embedding Generation**:
+- Embeddings generated in configurable batches
+- Significant performance improvement for large datasets
+- Error handling for individual embedding failures
+- Maintains embedding quality
+
+**Note**: With connection pooling implemented, this is less critical but could provide benefits for extremely large batch operations.
+
+## CLI Commands Evolution
+
+### Enhanced Existing Commands
 ```bash
-# Phase 1: Enhanced chunking and resistance with project context
-cmx ingest --detect-boundaries --authority-level official --project-id "react-frontend" --project-name "React Frontend App"  # ✓ Basic ingest implemented
-cmx slice --granularity detailed --domains technical,business --project-scope "react-frontend,python-api"  # ✓ Basic slice implemented
-cmx assemble --target copilot --token-budget 8192 --quality-threshold 0.8 --project-ids "react-frontend" --exclude-projects "legacy-system"  # Placeholder implemented
+# Enhanced with new capabilities
+cmx ingest --detect-boundaries --authority-level official --project-id "react-frontend"
+cmx slice --granularity detailed --domains technical,business --project-scope "react-frontend,python-api"
+cmx assemble --target copilot --token-budget 8192 --quality-threshold 0.8 --project-ids "react-frontend"
 
-# Phase 2: Intelligence and adaptation
+# New intelligence and adaptation commands
 cmx analyze --query "implement user authentication" --task-type develop
 cmx optimize --context-budget 4096 --diversity-target 0.7
 cmx validate --check-conflicts --verify-dependencies
 
-# Phase 3: Cross-domain synthesis
+# Cross-domain synthesis commands
 cmx synthesize --domains security,architecture,compliance --context "EU startup"
 cmx graph --visualize-relationships --center-on authentication
 cmx migrate --from file --to vector --preserve-relationships
 
-# Phase 4: MCP and agent integration
+# MCP and agent integration commands
 cmx serve --mcp-port 8080 --enable-streaming --auth-required
 cmx monitor --analytics --usage-patterns --quality-metrics
-cmx agent-sdk --language python --framework langchain
 ```
 
-**New Commands:**
+### New Commands
 ```bash
-# Project-aware knowledge management
-cmx projects --list --show-stats  # List all ingested projects with chunk counts
-cmx projects --add "mobile-app" --path "/path/to/mobile" --type "react-native"
-cmx projects --remove "legacy-system" --archive-chunks
-cmx context-select --projects "react-frontend,python-api" --output copilot-context.md
-cmx cross-project --detect-conflicts --resolve-by-authority
-
-# Knowledge management
-cmx refactor --monolith context.md --output-taxonomy why-who-what-how
-cmx dedupe --similarity-threshold 0.9 --preserve-authority --within-projects
-cmx cluster --method semantic --target-size 50 --auto-label --project-scope "frontend"
+# Advanced knowledge management
+cmx cache --stats --clear --configure-size 1000
+cmx quarantine --list --review --resolve-auto --clear
+cmx performance --benchmark --profile --optimize
 
 # Quality and governance
 cmx audit --check-provenance --validate-authority --detect-staleness
 cmx compliance --standard iso27001 --generate-report
 cmx benchmark --knowledge-base size --query-performance --accuracy-metrics
-
-# Advanced features
-cmx learn --from-usage --optimize-clustering --improve-relevance
-cmx export --format openapi --include-schemas --target enterprise
-cmx federation --connect-remote --sync-strategy merge --conflict-resolution authority
 ```
 
-### MCP Resource Server Capabilities
+## MCP Resource Server Capabilities
 
-**Core Knowledge Resources:**
+**Core Knowledge Resources**:
 - `/knowledge/chunks` - Individual knowledge pieces with metadata
 - `/knowledge/domains` - Domain-specific knowledge collections
 - `/knowledge/projects` - Project-scoped knowledge collections
@@ -462,7 +337,7 @@ cmx federation --connect-remote --sync-strategy merge --conflict-resolution auth
 - `/knowledge/relationships` - Knowledge dependency graphs
 - `/knowledge/context-select` - Project-aware context assembly
 
-**Advanced Agent Services:**
+**Advanced Agent Services**:
 - Real-time context assembly based on agent queries with project filtering
 - Project-aware knowledge delivery preventing cross-project contamination
 - Adaptive granularity selection for token constraints
@@ -470,13 +345,11 @@ cmx federation --connect-remote --sync-strategy merge --conflict-resolution auth
 - Multi-project context selection and assembly
 - Usage analytics and feedback collection for continuous improvement
 
----
-
 ## Success Metrics
 
 ### Technical Metrics
-- **Knowledge Quality**: Conflict detection accuracy > 95%, staleness detection < 24hrs
-- **Performance**: Context assembly < 100ms, MCP response time < 50ms
+- **Performance**: Context assembly < 100ms, MCP response time < 50ms, Cache hit rate > 80%
+- **Quality**: Conflict detection accuracy > 95%, Knowledge staleness detection < 24hrs
 - **Scalability**: Support 10M+ knowledge chunks, 1000+ concurrent agent requests
 - **Reliability**: 99.9% uptime, graceful degradation under load
 
@@ -492,15 +365,13 @@ cmx federation --connect-remote --sync-strategy merge --conflict-resolution auth
 - **Time Savings**: Reduced context preparation and knowledge management overhead
 - **Adoption**: Growing usage across development teams and agent deployments
 
----
-
 ## Risk Mitigation
 
 ### Technical Risks
-- **Vector Database Dependency**: Implement fallback to file-based storage, support multiple vector backends
 - **Performance Degradation**: Implement tiered caching, graceful degradation strategies
 - **Knowledge Quality**: Comprehensive validation pipelines, human review workflows
 - **Migration Complexity**: Phased rollout, backward compatibility, rollback capabilities
+- **Scalability Issues**: Cloud-native architecture, auto-scaling capabilities
 
 ### User Adoption Risks
 - **Learning Curve**: Extensive documentation, interactive tutorials, gradual feature introduction
@@ -508,18 +379,25 @@ cmx federation --connect-remote --sync-strategy merge --conflict-resolution auth
 - **Value Demonstration**: Clear ROI metrics, success stories, pilot programs
 - **Change Management**: Training programs, migration assistance, community support
 
-### Operational Risks
-- **Infrastructure Scaling**: Cloud-native architecture, auto-scaling capabilities
-- **Security Vulnerabilities**: Regular security audits, encrypted storage, access controls
-- **Data Loss**: Multi-tier backups, disaster recovery procedures
-- **Compliance Issues**: Built-in compliance features, audit trails, governance workflows
+## Implementation Priority
 
----
+### Immediate Focus (Next 3 months)
+1. **Advanced Caching System** - Critical for performance
+2. **Performance Monitoring** - Essential for system reliability
+3. **Integration Test Framework** - Required for quality assurance
+
+### Medium Term (Months 4-6)
+1. **Adaptive Granularity** - Enhances user experience
+2. **Knowledge Quarantine System** - Improves knowledge quality
+3. **Precise Knowledge Fitting** - Better relevance and filtering
+
+### Long Term (Months 7-12)
+1. **MCP Integration** - Strategic for agent ecosystem
+2. **Knowledge Graph Integration** - Advanced relationship modeling
+3. **Enterprise Features** - Business value and scalability
 
 ## Conclusion
 
-This plan transforms Context-Mixer from a simple prompt fragment manager into a sophisticated knowledge management system that embodies the CRAFT theory principles. The phased approach ensures steady progress while maintaining backward compatibility and user adoption.
+Context Mixer has achieved significant architectural maturity with the completion of foundational systems. This plan focuses on the remaining high-impact features needed to complete the vision of a sophisticated knowledge management system with MCP integration.
 
-The ultimate vision is a system that not only helps developers manage prompt instructions but fundamentally changes how knowledge is organized, shared, and delivered to AI agents. By implementing CRAFT principles, Context-Mixer will become an essential tool for any organization serious about AI-assisted development and knowledge management.
-
-The progression from CLI-based ahead-of-time context preparation to MCP-based just-in-time agent integration represents a natural evolution that serves both current needs and future AI development patterns. The system will grow with the ecosystem while maintaining its core mission: delivering the right knowledge at the right time in the right format for optimal decision-making.
+The progression from current CLI-based capabilities to MCP-based just-in-time agent integration represents the natural evolution that serves both current needs and future AI development patterns. The system will continue to grow with the ecosystem while maintaining its core mission: delivering the right knowledge at the right time in the right format for optimal decision-making.

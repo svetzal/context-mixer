@@ -38,7 +38,9 @@ plugins:
           - craft-overview.md
         Using cmx:
           - ingesting-prompts.md
+          - slicing-context.md
           - assembling-copilot-instructions.md
+          - exploring-library.md
           - managing-quarantine.md
 
 markdown_extensions:
@@ -60,7 +62,9 @@ nav:
   - CRAFT Framework: craft-overview.md
   - Using cmx:
       - Ingesting Prompts: ingesting-prompts.md
+      - Slicing Context: slicing-context.md
       - Assembling Copilot Instructions: assembling-copilot-instructions.md
+      - Exploring Your Library: exploring-library.md
       - Managing Knowledge Quarantine: managing-quarantine.md
 
 repo_name: svetzal/context-mixer

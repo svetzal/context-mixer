@@ -11,9 +11,12 @@ Context Mixer helps developers manage context fragments for different AI coding 
 - **🔄 Mix & Slice** context fragments into variant-specific bundles with CRAFT-aware filtering
 - **📥 Ingest & Normalize** existing context artifacts from multiple projects with project isolation
 - **📚 Source-of-Truth Library** under Git for history and collaboration
-- **🛡️ Conflict Detection & Quarantine** to prevent knowledge contamination
+- **🛡️ Conflict Detection & Quarantine** with comprehensive quarantine management system
 - **⚡ Token Optimization** with intelligent selection to fit assistant limits
 - **🎯 Project Context Isolation** to prevent cross-project knowledge contamination
+- **🔍 Semantic Search** with vector-based knowledge retrieval and hybrid search capabilities
+- **📊 Event-Driven Architecture** with comprehensive progress tracking and monitoring
+- **🏗️ Command Pattern Implementation** with consistent CLI interface and extensible commands
 
 ## Installation
 
@@ -46,18 +49,20 @@ cmx init
 cmx ingest ./my-react-project --project-id "react-frontend" --project-name "React Frontend App"
 cmx ingest ./my-python-api --project-id "python-api" --project-name "Python REST API"
 
-# Review and resolve any quarantined knowledge conflicts
-cmx quarantine list
-cmx quarantine resolve <chunk-id> accept "Approved after review"
+# Review and manage quarantined knowledge conflicts
+cmx quarantine list                                    # List all quarantined chunks
+cmx quarantine review <chunk-id>                       # Review a specific chunk
+cmx quarantine resolve <chunk-id> accept "Approved after review"  # Resolve conflicts
+cmx quarantine stats                                   # View quarantine statistics
 
 # Assemble contexts for a specific target with project filtering
 cmx assemble copilot --project-ids "react-frontend,python-api" --token-budget 8192
 
-# Slice context.md into content categories with CRAFT-aware filtering
+# Slice context into content categories with CRAFT-aware filtering
 cmx slice --granularity detailed --domains technical,business --project-ids "react-frontend"
 
-# Sync with remote repository (coming soon)
-cmx sync
+# Open and explore your context library
+cmx open
 ```
 
 ## License
