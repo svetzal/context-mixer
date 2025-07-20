@@ -9,7 +9,7 @@ import os
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Dict, Set
 from rich.console import Console
 
 from context_mixer.domain.conflict import Conflict
@@ -430,6 +430,266 @@ Resolution:"""
         return "LLMBased"
 
 
+class ClusteringBasedResolutionStrategy(ConflictResolutionStrategy):
+    """
+    Clustering-based conflict resolution strategy using semantic similarity.
+
+    This strategy leverages semantic clustering to intelligently resolve conflicts
+    by grouping conflicting guidance based on meaning and applying cluster-aware
+    resolution rules.
+    """
+
+    def __init__(self, clustering_config=None, fallback_strategy=None):
+        """
+        Initialize the clustering-based resolution strategy.
+
+        Args:
+            clustering_config: Optional clustering configuration
+            fallback_strategy: Strategy to use when clustering is unavailable
+        """
+        self.clustering_config = clustering_config
+        self.fallback_strategy = fallback_strategy or AutomaticResolutionStrategy()
+        
+        # Try to import clustering dependencies
+        try:
+            from context_mixer.domain.clustering import KnowledgeClusterer, ClusteringConfig
+            self._clustering_available = True
+            self._clusterer_class = KnowledgeClusterer
+            self._config_class = ClusteringConfig
+        except ImportError:
+            self._clustering_available = False
+            self._clusterer_class = None
+            self._config_class = None
+
+    def resolve_conflicts(self, conflicts: List[Conflict], console: Optional[Console] = None) -> List[Conflict]:
+        """
+        Resolve conflicts using clustering-based analysis.
+
+        This method groups conflicting guidance by semantic similarity and applies
+        cluster-aware resolution rules to intelligently resolve conflicts.
+
+        Args:
+            conflicts: List of conflicts to resolve
+            console: Optional console for logging
+
+        Returns:
+            List of resolved conflicts
+        """
+        if not conflicts:
+            return []
+
+        if not self._clustering_available:
+            if console:
+                console.print("[yellow]Clustering not available, falling back to automatic resolution[/yellow]")
+            return self.fallback_strategy.resolve_conflicts(conflicts, console)
+
+        try:
+            # Group conflicts by semantic similarity using clustering
+            conflict_clusters = self._cluster_conflicts(conflicts, console)
+            
+            resolved_conflicts = []
+            for conflict in conflicts:
+                resolution = self._resolve_with_clustering(conflict, conflict_clusters, console)
+                
+                resolved_conflict = Conflict(
+                    description=conflict.description,
+                    conflicting_guidance=conflict.conflicting_guidance,
+                    resolution=resolution
+                )
+                resolved_conflicts.append(resolved_conflict)
+
+            return resolved_conflicts
+
+        except Exception as e:
+            if console:
+                console.print(f"[red]Clustering resolution failed: {e}[/red]")
+                console.print("[yellow]Falling back to automatic resolution[/yellow]")
+            return self.fallback_strategy.resolve_conflicts(conflicts, console)
+
+    def _cluster_conflicts(self, conflicts: List[Conflict], console: Optional[Console] = None) -> Dict[int, Set[int]]:
+        """
+        Cluster conflicts based on semantic similarity of their guidance.
+
+        Args:
+            conflicts: List of conflicts to cluster
+            console: Optional console for logging
+
+        Returns:
+            Dictionary mapping cluster IDs to sets of conflict indices
+        """
+        if not conflicts:
+            return {}
+
+        try:
+            # Extract all unique guidance texts for clustering
+            all_guidance_texts = []
+            conflict_guidance_mapping = []  # Map (conflict_idx, guidance_idx) to text_idx
+            
+            for conflict_idx, conflict in enumerate(conflicts):
+                for guidance_idx, guidance in enumerate(conflict.conflicting_guidance):
+                    text = guidance.content.strip()
+                    if text and text not in all_guidance_texts:
+                        all_guidance_texts.append(text)
+                    text_idx = all_guidance_texts.index(text)
+                    conflict_guidance_mapping.append((conflict_idx, guidance_idx, text_idx))
+
+            if len(all_guidance_texts) < 2:
+                # Not enough data for clustering, treat as single cluster
+                return {0: set(range(len(conflicts)))}
+
+            # For simplicity, use basic text similarity clustering
+            # In a full implementation, this would use embeddings and HDBSCAN
+            clusters = self._simple_text_clustering(all_guidance_texts)
+            
+            # Map back to conflicts
+            conflict_clusters = {}
+            for conflict_idx in range(len(conflicts)):
+                # Find the cluster for the majority of guidance in this conflict
+                cluster_votes = {}
+                for mapping in conflict_guidance_mapping:
+                    if mapping[0] == conflict_idx:
+                        text_idx = mapping[2]
+                        cluster_id = clusters.get(text_idx, -1)
+                        cluster_votes[cluster_id] = cluster_votes.get(cluster_id, 0) + 1
+                
+                # Choose cluster with most votes
+                best_cluster = max(cluster_votes, key=cluster_votes.get) if cluster_votes else 0
+                if best_cluster not in conflict_clusters:
+                    conflict_clusters[best_cluster] = set()
+                conflict_clusters[best_cluster].add(conflict_idx)
+
+            if console:
+                console.print(f"[blue]Clustered {len(conflicts)} conflicts into {len(conflict_clusters)} groups[/blue]")
+
+            return conflict_clusters
+
+        except Exception as e:
+            if console:
+                console.print(f"[yellow]Conflict clustering failed: {e}. Using simple grouping.[/yellow]")
+            # Fallback: treat all conflicts as single cluster
+            return {0: set(range(len(conflicts)))}
+
+    def _simple_text_clustering(self, texts: List[str]) -> Dict[int, int]:
+        """
+        Simple text clustering based on keyword overlap.
+        
+        This is a simplified implementation. In production, this would use
+        embeddings and proper clustering algorithms.
+        
+        Args:
+            texts: List of text strings to cluster
+            
+        Returns:
+            Dictionary mapping text index to cluster ID
+        """
+        clusters = {}
+        next_cluster_id = 0
+        
+        for i, text in enumerate(texts):
+            # Simple keyword-based similarity
+            words = set(text.lower().split())
+            
+            # Find best matching existing cluster
+            best_cluster = -1
+            best_similarity = 0.0
+            
+            for existing_idx, existing_cluster in clusters.items():
+                existing_text = texts[existing_idx]
+                existing_words = set(existing_text.lower().split())
+                
+                # Calculate Jaccard similarity
+                intersection = len(words & existing_words)
+                union = len(words | existing_words)
+                similarity = intersection / union if union > 0 else 0.0
+                
+                if similarity > best_similarity and similarity > 0.3:  # 30% similarity threshold
+                    best_similarity = similarity
+                    best_cluster = existing_cluster
+            
+            if best_cluster != -1:
+                clusters[i] = best_cluster
+            else:
+                clusters[i] = next_cluster_id
+                next_cluster_id += 1
+        
+        return clusters
+
+    def _resolve_with_clustering(self, conflict: Conflict, conflict_clusters: Dict[int, Set[int]], 
+                               console: Optional[Console] = None) -> str:
+        """
+        Resolve a conflict using clustering-aware rules.
+
+        Args:
+            conflict: The conflict to resolve
+            conflict_clusters: Mapping of cluster IDs to conflict indices
+            console: Optional console for logging
+
+        Returns:
+            Resolution string
+        """
+        if not conflict.conflicting_guidance:
+            return ""
+
+        try:
+            # Strategy 1: If guidance items are in the same cluster, try to merge them
+            if len(conflict.conflicting_guidance) == 2:
+                guidance1, guidance2 = conflict.conflicting_guidance
+                
+                # Check if both guidance items have similar semantic content
+                words1 = set(guidance1.content.lower().split())
+                words2 = set(guidance2.content.lower().split())
+                
+                intersection = len(words1 & words2)
+                union = len(words1 | words2)
+                similarity = intersection / union if union > 0 else 0.0
+                
+                if similarity > 0.5:  # High similarity - merge them
+                    merged = self._merge_similar_guidance(guidance1.content, guidance2.content)
+                    if console:
+                        console.print(f"[green]Merged similar guidance (similarity: {similarity:.2f})[/green]")
+                    return merged
+
+            # Strategy 2: Prefer guidance from more authoritative sources
+            for guidance in conflict.conflicting_guidance:
+                if guidance.source == "existing":
+                    if console:
+                        console.print("[green]Chose existing guidance (authority preference)[/green]")
+                    return guidance.content.strip()
+
+            # Strategy 3: Choose the more comprehensive guidance
+            longest_guidance = max(conflict.conflicting_guidance, key=lambda g: len(g.content))
+            if console:
+                console.print("[green]Chose most comprehensive guidance[/green]")
+            return longest_guidance.content.strip()
+
+        except Exception as e:
+            if console:
+                console.print(f"[yellow]Clustering resolution failed: {e}. Using fallback.[/yellow]")
+            return self.fallback_strategy._determine_resolution(conflict)
+
+    def _merge_similar_guidance(self, guidance1: str, guidance2: str) -> str:
+        """
+        Merge two similar pieces of guidance into a coherent resolution.
+
+        Args:
+            guidance1: First guidance text
+            guidance2: Second guidance text
+
+        Returns:
+            Merged guidance text
+        """
+        # Simple merge strategy: combine unique sentences
+        sentences1 = set(s.strip() for s in guidance1.split('.') if s.strip())
+        sentences2 = set(s.strip() for s in guidance2.split('.') if s.strip())
+        
+        all_sentences = sentences1 | sentences2
+        return '. '.join(sorted(all_sentences)) + '.'
+
+    def get_strategy_name(self) -> str:
+        """Return the name of this strategy."""
+        return "ClusteringBased"
+
+
 class ConflictResolutionContext:
     """
     Context class that manages conflict resolution strategy selection and execution.
@@ -484,7 +744,7 @@ class ConflictResolutionStrategyFactory:
         Create a conflict resolution strategy by type.
 
         Args:
-            strategy_type: Type of strategy ("interactive", "automatic", "llm")
+            strategy_type: Type of strategy ("interactive", "automatic", "llm", "clustering")
             **kwargs: Additional arguments for strategy initialization
 
         Returns:
@@ -501,10 +761,12 @@ class ConflictResolutionStrategyFactory:
             return AutomaticResolutionStrategy(**kwargs)
         elif strategy_type in ("llm", "ai", "llm-based"):
             return LLMBasedResolutionStrategy(**kwargs)
+        elif strategy_type in ("clustering", "cluster", "clustering-based"):
+            return ClusteringBasedResolutionStrategy(**kwargs)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
     @staticmethod
     def get_available_strategies() -> List[str]:
         """Get list of available strategy types."""
-        return ["interactive", "automatic", "llm"]
+        return ["interactive", "automatic", "llm", "clustering"]

@@ -280,6 +280,10 @@ def ingest(
             None,
             help="Human-readable project name"
         ),
+        resolution_strategy: Optional[str] = typer.Option(
+            "interactive",
+            help="Conflict resolution strategy: interactive, automatic, llm, clustering"
+        ),
 ):
     """
     Ingest existing context artifacts into the library.
@@ -295,6 +299,32 @@ def ingest(
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
     knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create conflict resolution strategy based on user selection
+    resolver = None
+    if resolution_strategy and resolution_strategy.lower() != "interactive":
+        try:
+            from context_mixer.commands.interactions.conflict_resolution_strategies import ConflictResolutionStrategyFactory
+            
+            # Create the strategy
+            strategy = ConflictResolutionStrategyFactory.create_strategy(resolution_strategy)
+            
+            # Create a resolver adapter that implements ConflictResolver protocol
+            class StrategyResolver:
+                def __init__(self, strategy, console):
+                    self.strategy = strategy
+                    self.console = console
+                
+                def resolve_conflicts(self, conflicts):
+                    return self.strategy.resolve_conflicts(conflicts, self.console)
+            
+            resolver = StrategyResolver(strategy, console)
+            console.print(f"[blue]Using {strategy.get_strategy_name()} conflict resolution strategy[/blue]")
+            
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not create {resolution_strategy} strategy: {e}[/yellow]")
+            console.print("[yellow]Falling back to interactive resolution[/yellow]")
+            resolver = None
 
     # Create and execute the ingest command with injected dependencies
     ingest_command = IngestCommand(knowledge_store)
@@ -312,7 +342,8 @@ def ingest(
         parameters={
             'path': path,
             'project_id': project_id,
-            'project_name': project_name
+            'project_name': project_name,
+            'resolver': resolver  # Pass the resolver through parameters
         }
     )
 

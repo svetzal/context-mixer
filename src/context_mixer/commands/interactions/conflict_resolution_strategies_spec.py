@@ -15,6 +15,7 @@ from context_mixer.commands.interactions.conflict_resolution_strategies import (
     UserInteractiveResolutionStrategy,
     AutomaticResolutionStrategy,
     LLMBasedResolutionStrategy,
+    ClusteringBasedResolutionStrategy,
     ConflictResolutionContext,
     ConflictResolutionStrategyFactory
 )
@@ -336,6 +337,24 @@ class DescribeConflictResolutionStrategyFactory:
         assert isinstance(strategy, LLMBasedResolutionStrategy)
         assert strategy.llm_gateway == mock_llm_gateway
 
+    def should_create_clustering_strategy(self):
+        strategy = ConflictResolutionStrategyFactory.create_strategy("clustering")
+        assert isinstance(strategy, ClusteringBasedResolutionStrategy)
+
+    def should_create_clustering_strategy_with_aliases(self):
+        for alias in ["cluster", "clustering-based"]:
+            strategy = ConflictResolutionStrategyFactory.create_strategy(alias)
+            assert isinstance(strategy, ClusteringBasedResolutionStrategy)
+
+    def should_pass_kwargs_to_clustering_strategy(self):
+        fallback = AutomaticResolutionStrategy()
+        strategy = ConflictResolutionStrategyFactory.create_strategy(
+            "clustering",
+            fallback_strategy=fallback
+        )
+        assert isinstance(strategy, ClusteringBasedResolutionStrategy)
+        assert strategy.fallback_strategy == fallback
+
     def should_handle_case_insensitive_strategy_types(self):
         strategy = ConflictResolutionStrategyFactory.create_strategy("INTERACTIVE")
         assert isinstance(strategy, UserInteractiveResolutionStrategy)
@@ -346,7 +365,7 @@ class DescribeConflictResolutionStrategyFactory:
 
     def should_return_available_strategies(self):
         strategies = ConflictResolutionStrategyFactory.get_available_strategies()
-        assert strategies == ["interactive", "automatic", "llm"]
+        assert strategies == ["interactive", "automatic", "llm", "clustering"]
 
 
 class DescribeStrategyIntegration:
@@ -357,7 +376,8 @@ class DescribeStrategyIntegration:
         strategies = [
             UserInteractiveResolutionStrategy(),
             AutomaticResolutionStrategy(),
-            LLMBasedResolutionStrategy()
+            LLMBasedResolutionStrategy(),
+            ClusteringBasedResolutionStrategy()
         ]
 
         for strategy in strategies:
@@ -393,3 +413,119 @@ class DescribeStrategyIntegration:
 
         # Verify strategy was actually changed
         assert isinstance(context.get_strategy(), LLMBasedResolutionStrategy)
+
+
+class DescribeClusteringBasedResolutionStrategy:
+    """Tests for the clustering-based resolution strategy."""
+
+    @pytest.fixture
+    def strategy(self):
+        return ClusteringBasedResolutionStrategy()
+
+    @pytest.fixture
+    def sample_similar_conflicts(self):
+        """Create conflicts with similar guidance for clustering tests."""
+        conflict1 = Conflict(
+            description="Code formatting conflict",
+            conflicting_guidance=[
+                ConflictingGuidance(content="Use spaces for indentation", source="new"),
+                ConflictingGuidance(content="Use space characters for indenting code", source="existing")
+            ]
+        )
+        conflict2 = Conflict(
+            description="Variable naming conflict", 
+            conflicting_guidance=[
+                ConflictingGuidance(content="Use camelCase for variables", source="new"),
+                ConflictingGuidance(content="Use snake_case for variables", source="existing")
+            ]
+        )
+        return [conflict1, conflict2]
+
+    def should_return_strategy_name(self, strategy):
+        assert strategy.get_strategy_name() == "ClusteringBased"
+
+    def should_return_empty_list_for_no_conflicts(self, strategy, mock_console):
+        result = strategy.resolve_conflicts([], mock_console)
+        assert result == []
+
+    def should_fallback_when_clustering_unavailable(self, mocker, mock_console, sample_conflicts):
+        # Create strategy with clustering disabled
+        strategy = ClusteringBasedResolutionStrategy()
+        strategy._clustering_available = False
+        
+        result = strategy.resolve_conflicts(sample_conflicts, mock_console)
+        
+        assert len(result) == 2
+        assert all(conflict.resolution is not None for conflict in result)
+        # Should use fallback strategy (automatic)
+        assert result[0].resolution == "Use tabs for indentation"
+
+    def should_merge_similar_guidance(self, strategy, mock_console):
+        # Create conflict with similar guidance
+        conflict = Conflict(
+            description="Similar guidance conflict",
+            conflicting_guidance=[
+                ConflictingGuidance(content="Use consistent formatting", source="new"),
+                ConflictingGuidance(content="Apply consistent formatting rules", source="existing")
+            ]
+        )
+        
+        result = strategy.resolve_conflicts([conflict], mock_console)
+        
+        assert len(result) == 1
+        resolved = result[0]
+        assert resolved.resolution is not None
+        assert "formatting" in resolved.resolution.lower()
+
+    def should_prefer_existing_guidance_when_no_similarity(self, strategy, mock_console):
+        # Create conflict with dissimilar guidance
+        conflict = Conflict(
+            description="Different approaches",
+            conflicting_guidance=[
+                ConflictingGuidance(content="Use approach A", source="new"),
+                ConflictingGuidance(content="Use approach B", source="existing")
+            ]
+        )
+        
+        result = strategy.resolve_conflicts([conflict], mock_console)
+        
+        assert len(result) == 1
+        resolved = result[0]
+        assert resolved.resolution == "Use approach B"
+
+    def should_choose_most_comprehensive_guidance(self, strategy, mock_console):
+        # Create conflict where one guidance is much longer
+        conflict = Conflict(
+            description="Comprehensiveness test",
+            conflicting_guidance=[
+                ConflictingGuidance(content="Short", source="new"),
+                ConflictingGuidance(content="This is a much longer and more comprehensive piece of guidance", source="new")
+            ]
+        )
+        
+        result = strategy.resolve_conflicts([conflict], mock_console)
+        
+        assert len(result) == 1
+        resolved = result[0]
+        assert "comprehensive" in resolved.resolution
+
+    def should_handle_clustering_errors_gracefully(self, mocker, strategy, mock_console, sample_conflicts):
+        # Mock _cluster_conflicts to raise an exception
+        mocker.patch.object(strategy, '_cluster_conflicts', side_effect=Exception("Clustering failed"))
+        
+        result = strategy.resolve_conflicts(sample_conflicts, mock_console)
+        
+        # Should fallback to automatic resolution
+        assert len(result) == 2
+        assert all(conflict.resolution is not None for conflict in result)
+
+    def should_log_clustering_progress(self, strategy, mock_console, sample_similar_conflicts):
+        result = strategy.resolve_conflicts(sample_similar_conflicts, mock_console)
+        
+        # Verify logging calls were made
+        assert mock_console.print.called
+        
+        # Check that clustering information was logged
+        log_messages = [call.args[0] for call in mock_console.print.call_args_list]
+        clustering_logs = [msg for msg in log_messages if "cluster" in msg.lower()]
+        assert len(clustering_logs) > 0
