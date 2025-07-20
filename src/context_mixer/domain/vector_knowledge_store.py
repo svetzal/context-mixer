@@ -596,6 +596,8 @@ class VectorKnowledgeStore(KnowledgeStore):
             "is_noise": cluster_id == -1,
             "cluster_chunks": list(cluster_chunks)
         }
+
+    def _fast_conflict_check(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
         """
         Check if two chunks are potentially conflicting based on metadata.
 
