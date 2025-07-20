@@ -5,10 +5,10 @@ This module provides the main entry point for the command-line interface.
 """
 
 import asyncio
+import logging
 import os
 from pathlib import Path
-from typing import Optional, List
-import logging
+from typing import Optional
 
 IS_NOT_YET_IMPLEMENTED = "This functionality is not yet implemented."
 
@@ -21,19 +21,19 @@ from mojentic.llm.gateways import OpenAIGateway
 from rich.console import Console
 from rich.panel import Panel
 
-from context_mixer.commands.init import do_init
-from context_mixer.commands.ingest import do_ingest, IngestCommand
-from context_mixer.commands.open import do_open
-from context_mixer.commands.slice import do_slice
-from context_mixer.commands.assemble import do_assemble
+from context_mixer.commands.init import InitCommand
+from context_mixer.commands.ingest import IngestCommand
+from context_mixer.commands.open import OpenCommand
+from context_mixer.commands.slice import SliceCommand
+from context_mixer.commands.assemble import AssembleCommand
 from context_mixer.utils.progress import ProgressTracker
 from context_mixer.utils.cli_progress import CLIProgressObserver
 from context_mixer.commands.quarantine import (
-    do_quarantine_list,
-    do_quarantine_review,
-    do_quarantine_resolve,
-    do_quarantine_stats,
-    do_quarantine_clear
+    QuarantineListCommand,
+    QuarantineReviewCommand,
+    QuarantineResolveCommand,
+    QuarantineStatsCommand,
+    QuarantineClearCommand
 )
 from context_mixer.commands.base import CommandContext
 from context_mixer.config import Config
@@ -83,7 +83,24 @@ def init(
     initializes it as a Git repository, and sets up the default taxonomy structure.
     """
     # Create a new config with the specified path if provided
-    do_init(console, Config(library_path), remote, provider, model, git_gateway)
+    config = Config(library_path)
+
+    # Create and execute the init command
+    init_command = InitCommand()
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        git_gateway=git_gateway,
+        parameters={
+            'remote': remote,
+            'provider': provider,
+            'model': model
+        }
+    )
+
+    asyncio.run(init_command.execute(context))
 
 
 @app.command()
@@ -139,19 +156,35 @@ def assemble(
     exclude_project_list = exclude_projects.split(',') if exclude_projects else None
 
     # Create a new config with the specified library path if provided
-    asyncio.run(do_assemble(
-        console, 
-        Config(library_path), 
-        target, 
-        output, 
-        profile, 
-        filter, 
-        project_id_list,
-        exclude_project_list,
-        token_budget, 
-        quality_threshold,
-        verbose
-    ))
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the assemble command
+    assemble_command = AssembleCommand()
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        llm_gateway=llm_gateway,
+        knowledge_store=knowledge_store,
+        parameters={
+            'target': target,
+            'output': output,
+            'profile': profile,
+            'filter': filter,
+            'project_ids': project_id_list,
+            'exclude_projects': exclude_project_list,
+            'token_budget': token_budget,
+            'quality_threshold': quality_threshold,
+            'verbose': verbose
+        }
+    )
+
+    asyncio.run(assemble_command.execute(context))
 
 
 @app.command()
@@ -208,17 +241,27 @@ def slice(
     exclude_project_list = exclude_projects.split(',') if exclude_projects else None
 
     # Create a new config with the specified library path if provided
-    do_slice(
-        console, 
-        Config(library_path), 
-        llm_gateway, 
-        output,
-        granularity=granularity,
-        domains=domain_list,
-        project_ids=project_id_list,
-        exclude_projects=exclude_project_list,
-        authority_level=authority_level
+    config = Config(library_path)
+
+    # Create and execute the slice command
+    slice_command = SliceCommand()
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        llm_gateway=llm_gateway,
+        parameters={
+            'output_path': output,
+            'granularity': granularity,
+            'domains': domain_list,
+            'project_ids': project_id_list,
+            'exclude_projects': exclude_project_list,
+            'authority_level': authority_level
+        }
     )
+
+    asyncio.run(slice_command.execute(context))
 
 
 @app.command()
@@ -311,7 +354,16 @@ def open():
     Uses the editor specified by the $EDITOR environment variable,
     falling back to VS Code if not set.
     """
-    do_open(console, Config())
+    # Create and execute the open command
+    open_command = OpenCommand()
+
+    # Create command context with all necessary dependencies
+    context = CommandContext(
+        console=console,
+        config=Config()
+    )
+
+    asyncio.run(open_command.execute(context))
 
 
 # Create quarantine subcommand group
@@ -348,7 +400,30 @@ def quarantine_list(
     Shows all quarantined chunks that match the specified filters.
     Use filters to narrow down results by reason, resolution status, priority, or project.
     """
-    do_quarantine_list(console, Config(library_path), reason, resolved, priority, project)
+    # Create a new config with the specified library path if provided
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the quarantine list command
+    quarantine_list_command = QuarantineListCommand()
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        knowledge_store=knowledge_store,
+        parameters={
+            'reason': reason,
+            'resolved': resolved,
+            'priority': priority,
+            'project': project
+        }
+    )
+
+    asyncio.run(quarantine_list_command.execute(context))
 
 
 @quarantine_app.command("review")
@@ -365,7 +440,27 @@ def quarantine_review(
     Shows comprehensive information about a quarantined chunk including
     the reason for quarantine, conflicting chunks, and resolution status.
     """
-    do_quarantine_review(console, Config(library_path), chunk_id)
+    # Create a new config with the specified library path if provided
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the quarantine review command
+    quarantine_review_command = QuarantineReviewCommand()
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        knowledge_store=knowledge_store,
+        parameters={
+            'chunk_id': chunk_id
+        }
+    )
+
+    asyncio.run(quarantine_review_command.execute(context))
 
 
 @quarantine_app.command("resolve")
@@ -397,7 +492,31 @@ def quarantine_resolve(
     - defer: Defer resolution to later time
     - escalate: Escalate to higher authority
     """
-    do_quarantine_resolve(console, Config(library_path), chunk_id, action, reason, resolved_by, notes)
+    # Create a new config with the specified library path if provided
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the quarantine resolve command
+    quarantine_resolve_command = QuarantineResolveCommand()
+
+    # Create command context with all necessary dependencies and parameters
+    context = CommandContext(
+        console=console,
+        config=config,
+        knowledge_store=knowledge_store,
+        parameters={
+            'chunk_id': chunk_id,
+            'action': action,
+            'reason': reason,
+            'resolved_by': resolved_by,
+            'notes': notes
+        }
+    )
+
+    asyncio.run(quarantine_resolve_command.execute(context))
 
 
 @quarantine_app.command("stats")
@@ -413,7 +532,24 @@ def quarantine_stats(
     Shows comprehensive statistics about quarantined chunks including
     counts by reason, priority breakdown, and age information.
     """
-    do_quarantine_stats(console, Config(library_path))
+    # Create a new config with the specified library path if provided
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the quarantine stats command
+    quarantine_stats_command = QuarantineStatsCommand()
+
+    # Create command context with all necessary dependencies
+    context = CommandContext(
+        console=console,
+        config=config,
+        knowledge_store=knowledge_store
+    )
+
+    asyncio.run(quarantine_stats_command.execute(context))
 
 
 @quarantine_app.command("clear")
@@ -429,7 +565,24 @@ def quarantine_clear(
     Removes all quarantined chunks that have been resolved to clean up
     the quarantine system. Requires confirmation before proceeding.
     """
-    do_quarantine_clear(console, Config(library_path))
+    # Create a new config with the specified library path if provided
+    config = Config(library_path)
+
+    # Create knowledge store with dependency injection
+    vector_store_path = config.library_path / "vector_store"
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+
+    # Create and execute the quarantine clear command
+    quarantine_clear_command = QuarantineClearCommand()
+
+    # Create command context with all necessary dependencies
+    context = CommandContext(
+        console=console,
+        config=config,
+        knowledge_store=knowledge_store
+    )
+
+    asyncio.run(quarantine_clear_command.execute(context))
 
 
 if __name__ == "__main__":
