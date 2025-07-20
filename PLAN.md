@@ -36,42 +36,88 @@ This updated plan focuses on the remaining high-impact features needed to comple
 
 ### 1.1 HDBSCAN Clustering for Conflict Detection Optimization
 **Priority**: Critical - Performance Impact  
-**Story Points**: 21
+**Story Points**: 34
 
 **Problem Statement**:
-Current conflict detection performs expensive pairwise comparisons between chunks, resulting in hundreds of thousands of LLM calls during ingestion (e.g., 535,095 internal conflict checks reported). This creates a significant performance bottleneck that makes large-scale knowledge ingestion impractical.
+Current conflict detection performs expensive pairwise comparisons between chunks, resulting in hundreds of thousands of LLM calls during ingestion (e.g., 535,095 internal conflict checks reported). Additionally, analysis of failed implementations revealed that rigid domain enumeration creates false positives where context-specific rules conflict with general guidelines that apply to different scopes (e.g., "Gateways should not be tested" vs "Write tests for any new functionality").
 
-**Implementation**:
-- Integrate HDBSCAN clustering algorithm to group semantically similar chunks
-- Pre-cluster existing knowledge chunks in embedding space using hierarchical density-based clustering
-- Implement cluster-aware conflict detection that only checks conflicts within same/nearby clusters
-- Use cluster representatives for initial conflict filtering before expensive LLM-based detection
-- Maintain cluster stability as knowledge base grows to avoid frequent re-clustering
-- Add cluster metadata to chunk storage for efficient cluster-based retrieval
+**Background - Universal Knowledge Hierarchies**:
+All knowledge domains exhibit natural hierarchical structures with increasing specificity and contextual bounding:
+- **Business Domain**: Corporate policies → Department guidelines → Team practices → Individual procedures
+- **Legal/Compliance Domain**: Regulatory frameworks → Industry standards → Company policies → Operational controls
+- **Technical Domain**: Architecture patterns → Service types → Implementation details → Code specifics  
+- **Operational Domain**: Process frameworks → Workflow categories → Task sequences → Action steps
 
-**Technical Approach**:
-- Add `hdbscan` dependency to project requirements
-- Extend VectorKnowledgeStore with clustering capabilities
-- Implement cluster-based conflict detection strategy
-- Create cluster maintenance operations for incremental updates
-- Add cluster visualization and analytics for monitoring cluster quality
-- **API Reference**: Complete HDBSCAN API documentation available in `refs/hdbscan.md`
+At each hierarchical level, rules that appear conflicting at a high level are often complementary when understood within their specific contextual boundaries. The clustering system must understand these natural knowledge hierarchies to prevent false positive conflicts between rules that apply to different contextual scopes.
+
+**Enhanced Implementation Strategy**:
+Drawing from lessons learned from `copilot/fix-1` and `junie` branch implementations:
+
+**1. Hierarchical Domain-Aware Clustering Architecture**
+- Implement nested cluster hierarchy: **Knowledge Domains** → **Contextual Sub-domains** → **Semantic Clusters** → **Knowledge Chunks**
+- Use HDBSCAN to automatically discover semantic clusters within all knowledge contexts (business, technical, operational, legal, etc.)
+- **Hierarchical Awareness**: Each knowledge chunk maintains awareness of at least one level up in its hierarchy, enabling contextual boundary recognition
+- **Cluster Intelligence**: Each cluster maintains awareness of its contained chunks plus a concise summary of the knowledge expressed across those chunks
+- Enable context-aware conflict detection that understands domain scope and contextual boundaries to prevent false positives
+- Auto-detect domain-specific patterns and contexts from content embeddings across all knowledge types
+
+**2. Dynamic Conflict Detection Strategy** (from junie branch insights)
+- Replace rigid domain enumeration with cluster-based dynamic candidate selection
+- Implement graduated similarity thresholds based on cluster relationships:
+  - Same semantic cluster: 0.7 (high semantic similarity expected)
+  - Cross-cluster, same architectural domain: 0.8 (moderate restriction)
+  - Cross-domain contexts: 0.9 (high restriction, rare valid conflicts)
+- Use cluster representatives and centroids for efficient initial filtering
+
+**3. Robust Configuration Management** (from copilot/fix-1 insights)
+- Comprehensive HDBSCAN configuration with validation
+- Production-ready error handling and fallback strategies
+- Cluster stability maintenance as knowledge base grows
+- Configurable clustering parameters per knowledge domain and contextual scope
+
+**4. Git Integration & CI/CD Pipeline**
+- Integrate pre-commit hook with HDBSCAN validation
+- GitHub Actions workflow setup for Copilot integration
+- Automated conflict detection benchmarking in CI
+
+**Technical Implementation**:
+```python
+# Core Components
+- HierarchicalKnowledgeClusterer: Multi-level clustering with cross-domain contextual awareness
+- ContextualChunk: Enhanced knowledge chunk with hierarchical parent awareness
+- IntelligentCluster: Cluster with contained chunk awareness and knowledge summarization
+- DynamicConflictDetector: Context-aware conflict detection using hierarchical relationships
+- ClusterQualityMonitor: Silhouette score, stability, and contextual coherence metrics
+- DomainContextClassifier: Auto-detection of domain patterns and contextual boundaries from embeddings
+- HierarchyAwareConflictResolver: Conflict resolution that understands contextual scope boundaries
+```
 
 **Acceptance Criteria**:
-- [ ] HDBSCAN clustering integration with configurable parameters (min_cluster_size, min_samples)
-- [ ] Cluster-aware conflict detection reducing comparisons by 80%+ 
-- [ ] Cluster metadata storage and retrieval in ChromaDB
-- [ ] Incremental cluster updates for new chunks without full re-clustering
-- [ ] Performance benchmarks showing significant reduction in conflict detection time
-- [ ] Cluster quality metrics and monitoring (silhouette score, cluster stability)
-- [ ] Fallback to traditional conflict detection for edge cases
-- [ ] Documentation and examples for cluster-based conflict detection
+- [ ] Hierarchical clustering with cross-domain contextual boundary detection
+- [ ] Knowledge chunks maintain awareness of parent hierarchical context (at least one level up), eg they know to which cluster they belong
+- [ ] Clusters maintain intelligence about contained chunks with automated knowledge summarization, and they also know to which broader cluster they belong
+- [ ] Dynamic conflict detection reducing false positives by 60%+ (measured against domain-specific scope scenarios)
+- [ ] Cluster-aware conflict detection reducing LLM calls by 80%+
+- [ ] Pre-commit hook integration with clustering validation
+- [ ] Incremental clustering for new chunks without full re-clustering  
+- [ ] Comprehensive benchmarking framework including domain-specific contextual boundary edge cases
+- [ ] Cluster quality metrics: silhouette score >0.3, domain coherence >0.7
+- [ ] Performance benchmarks: <100ms cluster assignment, <50ms conflict candidate selection
+- [ ] Fallback to traditional detection with graceful degradation
+- [ ] Production monitoring dashboard for cluster health
 
 **Expected Impact**:
-- Reduce conflict detection time from O(n*m) to O(k*log(k)) where k << n*m
-- Enable practical ingestion of large knowledge bases (10K+ chunks)
-- Maintain conflict detection accuracy while dramatically improving performance
-- Provide foundation for other clustering-based optimizations
+- Reduce conflict detection time from O(n²) to O(k*log(k)) where k << n²
+- Eliminate false positives from contextual boundary mismatches across all knowledge domains
+- Enable practical ingestion of 100K+ knowledge chunks across business, technical, operational, and other domains
+- Provide foundation for intelligent domain discovery and contextual classification
+- Support context-aware knowledge assembly with deep understanding of domain-specific boundaries
+
+**Risk Mitigation**:
+- Implement gradual rollout with A/B testing against traditional conflict detection
+- Maintain backward compatibility with existing domain-based workflows
+- Add comprehensive logging for cluster decision audit trails
+- Include cluster validation metrics to detect degradation in clustering quality
 
 ### 1.2 Advanced Caching System
 **Priority**: High - Performance Impact  
