@@ -98,7 +98,10 @@ class ChromaConnectionPool:
         try:
             client = chromadb.PersistentClient(
                 path=self.db_dir,
-                settings=Settings(allow_reset=True),
+                settings=Settings(
+                    allow_reset=True,
+                    anonymized_telemetry=False
+                ),
             )
             connection = ChromaConnection(client, time.time())
             logger.debug(f"Created new ChromaDB connection (total: {self._created_connections + 1})")

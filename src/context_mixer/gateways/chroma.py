@@ -3,6 +3,8 @@ from typing import List, Optional
 
 import chromadb
 from chromadb import Settings
+from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
+import numpy as np
 
 from context_mixer.domain.knowledge import (
     KnowledgeChunk, 
@@ -11,6 +13,29 @@ from context_mixer.domain.knowledge import (
 )
 from context_mixer.gateways.adapters.chroma_adapter import ChromaAdapter
 from context_mixer.gateways.chroma_connection_pool import ChromaConnectionPool
+
+
+class SimpleLocalEmbeddingFunction(EmbeddingFunction):
+    """
+    Simple local embedding function that doesn't require downloads.
+    Uses basic text hashing for embeddings - suitable for testing and offline use.
+    """
+    
+    def __call__(self, input: Documents) -> Embeddings:
+        """Generate simple hash-based embeddings for the input documents."""
+        embeddings = []
+        for doc in input:
+            # Create a simple hash-based embedding
+            # This is not semantically meaningful but allows offline operation
+            hash_val = hash(doc)
+            # Create a 384-dimensional vector (same as many embedding models)
+            # Use the hash to seed a random number generator for consistency
+            np.random.seed(hash_val % (2**32))
+            embedding = np.random.randn(384).astype(np.float32)
+            # Normalize the embedding
+            embedding = embedding / np.linalg.norm(embedding)
+            embeddings.append(embedding.tolist())
+        return embeddings
 
 
 class ChromaGateway:
@@ -64,6 +89,7 @@ class ChromaGateway:
         return client.get_or_create_collection(
             name="knowledge",
             metadata={"hnsw:space": "cosine"},
+            embedding_function=SimpleLocalEmbeddingFunction()
         )
 
     def store_knowledge_chunks(self, chunks: List[KnowledgeChunk]) -> None:
@@ -313,7 +339,7 @@ class ChromaGateway:
                 
                 results = collection.get(ids=chunk_ids, include=["embeddings"])
                 
-                if not results["embeddings"]:
+                if results["embeddings"] is None or len(results["embeddings"]) == 0:
                     return None
                 
                 # Filter out None embeddings and maintain order
