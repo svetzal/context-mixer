@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-07-19
+
+### Added
+- Progress tracking system with CLI integration for better user feedback during operations
+- Comprehensive command pattern tests and modular base implementations
+- Robust conflict resolution strategies with "not a conflict" support and editor-based input
+- Architectural backlog and testing specifications for future development
+
+### Changed
+- Expanded `content` field maximum length to 2000 characters for larger content handling
+- Enhanced conflict resolution with new options and improved progress tracking
+- Refactored conflict detection to use `asyncio.gather` for improved batch processing performance
+
+### Fixed
+- Enforced chunk size constraints and clarified granularity levels for better content processing
+- Cleaned up `ingest` command formatting for improved user experience
+- Removed deprecated debugging scripts to reduce codebase complexity
+
 ## [0.3.1] - 2025-01-27
 
 ### Fixed
