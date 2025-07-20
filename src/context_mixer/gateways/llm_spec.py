@@ -1,10 +1,10 @@
-import pytest
-from typing import List
 from datetime import datetime
+
+import pytest
+from mojentic.llm import LLMMessage, MessageRole
 from pydantic import BaseModel
 
-from mojentic.llm import LLMMessage, MessageRole
-from context_mixer.gateways.llm import LLMGateway, MockLLMGateway, LLMCall
+from context_mixer.gateways.llm import MockLLMGateway, LLMCall
 
 
 class SampleModel(BaseModel):

@@ -5,24 +5,23 @@ from pathlib import Path
 from rich.panel import Panel
 from rich.table import Table
 
-from context_mixer.commands.operations.merge import merge_content
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, \
+    ConflictResolver
 from context_mixer.commands.operations.commit import CommitOperation
+from context_mixer.commands.operations.merge import merge_content
 from context_mixer.config import Config, DEFAULT_ROOT_CONTEXT_FILENAME
-
-from context_mixer.gateways.llm import LLMGateway
-from context_mixer.gateways.git import GitGateway
 from context_mixer.domain.chunking_engine import ChunkingEngine
-from context_mixer.domain.knowledge_store import KnowledgeStore, KnowledgeStoreFactory
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
-from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
+from context_mixer.domain.events import ChunksIngestedEvent, ConflictDetectedEvent, \
+    ConflictResolvedEvent, EventBus
 from context_mixer.domain.knowledge import KnowledgeChunk
-from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
-from context_mixer.utils.progress import ProgressTracker, NoOpProgressObserver
+from context_mixer.domain.knowledge_store import KnowledgeStore, KnowledgeStoreFactory
+from context_mixer.gateways.git import GitGateway
+from context_mixer.gateways.llm import LLMGateway
 from context_mixer.utils.event_driven_progress import EventPublishingProgressTracker
-from context_mixer.domain.events import ChunksIngestedEvent, ConflictDetectedEvent, ConflictResolvedEvent, EventBus
+from context_mixer.utils.progress import ProgressTracker
+from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
 from .base import Command, CommandContext, CommandResult
-
-
 
 
 class IngestCommand(Command):

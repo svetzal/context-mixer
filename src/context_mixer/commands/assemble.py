@@ -5,23 +5,20 @@ This module provides the functionality to assemble context fragments for specifi
 using the CRAFT (Context-Aware Retrieval and Fusion Technology) system.
 """
 
-import asyncio
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
+
+from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.console import Console
 
-from context_mixer.config import Config
-from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
-from context_mixer.domain.knowledge import (
-    SearchQuery, 
-    AuthorityLevel, 
-    GranularityLevel,
-    TemporalScope
-)
 from context_mixer.commands.assembly_strategies import AssemblyStrategyFactory
+from context_mixer.config import Config
+from context_mixer.domain.knowledge import (
+    AuthorityLevel
+)
+from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 from .base import Command, CommandContext, CommandResult
 
 

@@ -1,14 +1,14 @@
 import asyncio
-from textwrap import dedent
 from typing import List, Tuple
 
 from mojentic.llm import LLMMessage
 
-from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
+from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, \
+    ConflictResolver
 from context_mixer.domain.conflict import ConflictList
-from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
-from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.domain.context_aware_prompts import ContextAwarePromptBuilder
+from context_mixer.domain.knowledge import KnowledgeChunk
+from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
 from context_mixer.gateways.llm import LLMGateway
 
 

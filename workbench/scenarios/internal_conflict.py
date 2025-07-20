@@ -7,9 +7,8 @@ This scenario tests detection of conflicts within a single file:
 This should be detected as an internal conflict.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from typing import Dict, List
 
 
 @dataclass

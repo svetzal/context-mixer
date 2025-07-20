@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from context_mixer.commands.assembly_strategies import (
     AssemblyStrategyFactory,
     CopilotAssemblyStrategy,

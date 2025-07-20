@@ -1,13 +1,16 @@
+import asyncio
+import os
 import tempfile
 from pathlib import Path
-import asyncio
+
+from mojentic.llm.gateways import OpenAIGateway
+
+from context_mixer.commands.ingest import do_ingest
 from context_mixer.config import Config
 from context_mixer.gateways.llm import LLMGateway
-from context_mixer.commands.ingest import do_ingest
 from workbench.automated_resolver import AutomatedConflictResolver
 from workbench.scenarios.false_positive_naming import get_scenario
-from mojentic.llm.gateways import OpenAIGateway
-import os
+
 
 async def debug_false_positive():
     # Get API key

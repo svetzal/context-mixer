@@ -10,9 +10,8 @@ should NOT be detected as conflicts:
 These are complementary rules, not conflicting ones.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from typing import Dict, List
 
 
 @dataclass

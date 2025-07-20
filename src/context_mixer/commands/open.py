@@ -6,7 +6,6 @@ This module provides the functionality to open the prompt library in the default
 
 import os
 import subprocess
-from pathlib import Path
 
 from rich.panel import Panel
 

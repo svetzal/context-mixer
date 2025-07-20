@@ -5,17 +5,10 @@ This module contains comprehensive tests for the quarantine system functionality
 including quarantining chunks, reviewing quarantined items, and resolving conflicts.
 """
 
-import pytest
 from datetime import datetime, timedelta, UTC
-from typing import List
 
-from context_mixer.domain.knowledge_quarantine import (
-    KnowledgeQuarantine,
-    QuarantinedChunk,
-    QuarantineReason,
-    ResolutionAction,
-    Resolution
-)
+import pytest
+
 from context_mixer.domain.knowledge import (
     KnowledgeChunk,
     ChunkMetadata,
@@ -23,6 +16,13 @@ from context_mixer.domain.knowledge import (
     AuthorityLevel,
     GranularityLevel,
     TemporalScope
+)
+from context_mixer.domain.knowledge_quarantine import (
+    KnowledgeQuarantine,
+    QuarantinedChunk,
+    QuarantineReason,
+    ResolutionAction,
+    Resolution
 )
 
 

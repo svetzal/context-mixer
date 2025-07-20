@@ -8,12 +8,12 @@ the context.md file and splits it into pieces based on content categories.
 from pathlib import Path
 from typing import List, Optional
 
-from rich.panel import Panel
 from mojentic.llm import LLMMessage, MessageRole
+from rich.panel import Panel
 
 from context_mixer.config import Config, DEFAULT_ROOT_CONTEXT_FILENAME
+from context_mixer.domain.llm_instructions import system_message
 from context_mixer.gateways.llm import LLMGateway
-from context_mixer.domain.llm_instructions import system_message, clean_prompt
 from .base import Command, CommandContext, CommandResult
 
 

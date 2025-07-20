@@ -1,6 +1,8 @@
 from typing import Dict, Optional
+
 from rich.console import Console
-from rich.progress import Progress, TaskID, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, MofNCompleteColumn
+from rich.progress import Progress, TaskID, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, \
+    MofNCompleteColumn
 
 from .progress import ProgressObserver, ProgressUpdate
 

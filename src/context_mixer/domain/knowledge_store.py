@@ -7,8 +7,8 @@ details behind domain-focused interfaces.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from pathlib import Path
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .vector_knowledge_store import VectorKnowledgeStore
@@ -19,9 +19,7 @@ from .knowledge import (
     KnowledgeChunk,
     SearchQuery,
     SearchResults,
-    AuthorityLevel,
-    GranularityLevel,
-    TemporalScope
+    AuthorityLevel
 )
 
 

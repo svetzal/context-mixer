@@ -8,9 +8,8 @@ This scenario tests the basic indentation conflict that we've encountered:
 This should be detected as a conflict and resolved automatically.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from typing import Dict, List
 
 
 @dataclass

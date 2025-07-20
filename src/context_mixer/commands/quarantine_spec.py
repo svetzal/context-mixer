@@ -5,10 +5,13 @@ Tests the command boundary as specified in the issue - the Command pattern
 implementation provides a perfect testing point for command behavior.
 """
 
-import pytest
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import pytest
+from rich.console import Console
+
+from context_mixer.commands.base import CommandContext, CommandResult
 from context_mixer.commands.quarantine import (
     QuarantineListCommand,
     QuarantineReviewCommand,
@@ -16,9 +19,7 @@ from context_mixer.commands.quarantine import (
     QuarantineStatsCommand,
     QuarantineClearCommand
 )
-from context_mixer.commands.base import CommandContext, CommandResult
 from context_mixer.config import Config
-from rich.console import Console
 
 
 @pytest.fixture

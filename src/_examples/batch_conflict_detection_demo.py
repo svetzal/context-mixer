@@ -7,8 +7,8 @@ Uses real LLM calls with o4-mini model for actual performance measurements.
 """
 
 import asyncio
-import os
 import logging
+import os
 from datetime import datetime
 
 # Set logging level before importing mojentic
@@ -21,7 +21,6 @@ from context_mixer.domain.knowledge import (
     GranularityLevel, TemporalScope
 )
 from context_mixer.gateways.llm import LLMGateway
-from context_mixer.domain.conflict import ConflictList, Conflict, ConflictingGuidance
 
 
 def create_sample_chunks():

@@ -1,10 +1,9 @@
+import logging
 import threading
 import time
-from pathlib import Path
-from typing import Optional, List
-from queue import Queue, Empty
 from contextlib import contextmanager
-import logging
+from pathlib import Path
+from queue import Queue, Empty
 
 import chromadb
 from chromadb import Settings

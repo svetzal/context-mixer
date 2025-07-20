@@ -6,14 +6,14 @@ including auto-selection of strategies based on conflict characteristics.
 """
 
 from rich.console import Console
-from context_mixer.domain.conflict import Conflict, ConflictingGuidance
+
 from context_mixer.commands.interactions.conflict_resolution_strategies import (
     ConflictResolutionStrategyFactory,
     ConflictResolutionContext,
-    UserInteractiveResolutionStrategy,
     AutomaticResolutionStrategy,
     LLMBasedResolutionStrategy
 )
+from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from workbench.automated_resolver import AutomatedConflictResolver
 
 

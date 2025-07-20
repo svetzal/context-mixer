@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Set
-import re
+from typing import List, Set
 
 from .context import Context, ContextType, ContextAnalysis
 

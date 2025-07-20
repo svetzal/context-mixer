@@ -1,9 +1,8 @@
 import asyncio
-import time
-import tempfile
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 import logging
+import tempfile
+import time
+from pathlib import Path
 
 # Set up logging to see connection pool activity
 logging.basicConfig(level=logging.INFO)

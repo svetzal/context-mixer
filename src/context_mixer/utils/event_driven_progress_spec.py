@@ -1,15 +1,16 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from rich.console import Console
 
 from context_mixer.domain.events import EventBus
 from context_mixer.domain.progress_events import (
     ProgressStartedEvent, ProgressUpdatedEvent, ProgressCompletedEvent, ProgressFailedEvent
 )
-from context_mixer.utils.progress import ProgressObserver, ProgressUpdate, ProgressStatus
 from context_mixer.utils.event_driven_progress import (
     EventDrivenProgressTracker, EventPublishingProgressTracker, create_cli_progress_tracker
 )
+from context_mixer.utils.progress import ProgressObserver, ProgressUpdate, ProgressStatus
 
 
 @pytest.fixture

@@ -5,11 +5,11 @@ This module contains comprehensive tests for the Strategy pattern implementation
 of conflict resolution.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from rich.console import Console
 
-from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.commands.interactions.conflict_resolution_strategies import (
     ConflictResolutionStrategy,
     UserInteractiveResolutionStrategy,
@@ -18,6 +18,7 @@ from context_mixer.commands.interactions.conflict_resolution_strategies import (
     ConflictResolutionContext,
     ConflictResolutionStrategyFactory
 )
+from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 
 
 @pytest.fixture

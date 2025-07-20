@@ -5,14 +5,12 @@ This module provides CLI functionality for reviewing, resolving, and managing
 knowledge chunks that have been quarantined due to conflicts or validation issues.
 """
 
-import asyncio
-from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
-from rich.panel import Panel
-from rich.table import Table
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
+from rich.panel import Panel
+from rich.prompt import Confirm
+from rich.table import Table
 from rich.text import Text
 
 from context_mixer.config import Config
@@ -22,7 +20,6 @@ from context_mixer.domain.knowledge_quarantine import (
     ResolutionAction,
     Resolution
 )
-from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 from .base import Command, CommandContext, CommandResult
 
 

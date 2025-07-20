@@ -5,11 +5,10 @@ This module provides automated conflict resolution for the workbench,
 eliminating the need for user input during testing.
 """
 
-import os
 from typing import List, Optional
+
 from rich.console import Console
 
-from context_mixer.domain.conflict import Conflict
 from context_mixer.commands.interactions.conflict_resolution_strategies import (
     ConflictResolutionStrategy,
     AutomaticResolutionStrategy,
@@ -17,6 +16,7 @@ from context_mixer.commands.interactions.conflict_resolution_strategies import (
     ConflictResolutionContext,
     ConflictResolutionStrategyFactory
 )
+from context_mixer.domain.conflict import Conflict
 
 
 class AutomatedConflictResolver:

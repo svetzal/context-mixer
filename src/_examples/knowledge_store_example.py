@@ -9,7 +9,6 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 from context_mixer.domain.knowledge import (
     KnowledgeChunk,
     ChunkMetadata,
@@ -19,6 +18,7 @@ from context_mixer.domain.knowledge import (
     GranularityLevel,
     TemporalScope
 )
+from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 
 
 async def main():

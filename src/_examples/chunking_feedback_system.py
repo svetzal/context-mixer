@@ -2,11 +2,11 @@
 """
 Feedback system for iteratively improving chunking prompts based on failure analysis.
 """
+import json
 import logging
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
-import json
 
 logging.basicConfig(level=logging.WARN)
 

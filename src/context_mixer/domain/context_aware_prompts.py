@@ -1,7 +1,7 @@
-from typing import List, Dict, Set
 from textwrap import dedent
+from typing import List, Set
 
-from .context import Context, ContextType, ContextAnalysis
+from .context import ContextType, ContextAnalysis
 from .context_detection import ContextDetectionEngine
 
 

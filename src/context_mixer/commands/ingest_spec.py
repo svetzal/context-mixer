@@ -3,29 +3,25 @@ Tests for the ingest command.
 """
 
 import pytest
-from pathlib import Path
-
 from rich.panel import Panel
 
-from context_mixer.commands.ingest import do_ingest, IngestCommand, apply_conflict_resolutions
 from context_mixer.commands.base import CommandContext, CommandResult
-from context_mixer.commands.operations.merge import detect_conflicts
-from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts
+from context_mixer.commands.ingest import do_ingest, IngestCommand, apply_conflict_resolutions
 from context_mixer.commands.operations.commit import CommitOperation
 from context_mixer.config import DEFAULT_ROOT_CONTEXT_FILENAME
+from context_mixer.domain.commit_message import CommitMessage
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.domain.knowledge import (
-    KnowledgeChunk, 
-    ChunkMetadata, 
+    KnowledgeChunk,
+    ChunkMetadata,
     ProvenanceInfo,
     AuthorityLevel,
     GranularityLevel,
     TemporalScope
 )
-from context_mixer.domain.commit_message import CommitMessage
+from context_mixer.domain.knowledge_store import KnowledgeStore
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
-from context_mixer.domain.knowledge_store import KnowledgeStore
 from context_mixer.spec_helpers import MessageMatcher
 
 MERGED_CONTENT_FROM_LLM = "Merged content from LLM"

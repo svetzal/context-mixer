@@ -5,7 +5,7 @@ This module contains business logic for analyzing git diffs and generating
 appropriate commit messages using LLM capabilities.
 """
 
-from mojentic.llm import LLMMessage, MessageRole
+from mojentic.llm import LLMMessage
 
 from context_mixer.domain.commit_message import CommitMessage
 from context_mixer.domain.llm_instructions import git_commit_system_message

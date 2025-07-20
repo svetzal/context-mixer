@@ -8,10 +8,10 @@ from typing import AnyStr
 
 import pytest
 
-from context_mixer.commands.init import do_init, InitCommand
 from context_mixer.commands.base import CommandContext, CommandResult
-from context_mixer.gateways.git import GitGateway
+from context_mixer.commands.init import do_init, InitCommand
 from context_mixer.config import Config
+from context_mixer.gateways.git import GitGateway
 
 
 @pytest.fixture

@@ -1,11 +1,11 @@
-import pytest
-from unittest.mock import MagicMock, AsyncMock
-from datetime import datetime
 import asyncio
+from datetime import datetime, UTC
+
+import pytest
 
 from context_mixer.domain.events import (
-    Event, EventBus, ChunksIngestedEvent, ConflictDetectedEvent, ConflictResolvedEvent,
-    get_event_bus, EventHandler, AsyncEventHandler
+    EventBus, ChunksIngestedEvent, ConflictDetectedEvent, ConflictResolvedEvent,
+    get_event_bus
 )
 
 
@@ -63,7 +63,7 @@ class DescribeEvent:
     def should_auto_generate_event_id_when_not_provided(self):
         event = ChunksIngestedEvent(
             event_id="",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="chunks_ingested",
             project_id="test",
             project_name="Test",
@@ -76,7 +76,7 @@ class DescribeEvent:
         assert len(event.event_id) > 0
 
     def should_auto_generate_timestamp_when_not_provided(self):
-        before = datetime.utcnow()
+        before = datetime.now(UTC)
         event = ChunksIngestedEvent(
             event_id="test-id",
             timestamp=None,
@@ -87,7 +87,7 @@ class DescribeEvent:
             file_paths=[],
             processing_time_seconds=1.0
         )
-        after = datetime.utcnow()
+        after = datetime.now(UTC)
 
         assert before <= event.timestamp <= after
 
@@ -100,7 +100,7 @@ class DescribeChunksIngestedEvent:
     def should_set_correct_event_type(self):
         event = ChunksIngestedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             project_id="test",
             project_name="Test",
@@ -125,7 +125,7 @@ class DescribeConflictDetectedEvent:
     def should_set_correct_event_type(self):
         event = ConflictDetectedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             project_id="test",
             conflict_count=1,
@@ -148,7 +148,7 @@ class DescribeConflictResolvedEvent:
     def should_set_correct_event_type(self):
         event = ConflictResolvedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             project_id="test",
             resolved_conflict_count=1,

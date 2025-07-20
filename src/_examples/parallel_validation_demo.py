@@ -1,13 +1,13 @@
-import time
-import os
 import logging
+import os
+import time
 from typing import List
 
 # Set logging level before importing mojentic
 logging.basicConfig(level=logging.WARN)
 
 from mojentic.llm.gateways import OpenAIGateway
-from context_mixer.domain.chunking_engine import ChunkingEngine, ValidationResult
+from context_mixer.domain.chunking_engine import ChunkingEngine
 from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, ProvenanceInfo, AuthorityLevel, GranularityLevel, TemporalScope
 from context_mixer.gateways.llm import LLMGateway
 

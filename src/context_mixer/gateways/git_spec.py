@@ -1,13 +1,11 @@
 """
 Tests for Git gateway commit functionality.
 """
-from pathlib import Path
-from typing import Any
 
 import pytest
 
-from context_mixer.gateways.git import GitGateway
 from context_mixer.domain.commit_message import CommitMessage
+from context_mixer.gateways.git import GitGateway
 
 
 @pytest.fixture

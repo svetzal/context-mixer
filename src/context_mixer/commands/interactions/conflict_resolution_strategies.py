@@ -9,7 +9,8 @@ import os
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
-from typing import List, Optional, Protocol
+from typing import List, Optional
+
 from rich.console import Console
 
 from context_mixer.domain.conflict import Conflict

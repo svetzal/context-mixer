@@ -6,14 +6,14 @@ that cannot be automatically resolved. It provides mechanisms to quarantine, rev
 and resolve conflicts in knowledge management following CRAFT principles.
 """
 
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from enum import Enum
-from datetime import datetime, UTC
 import uuid
+from datetime import datetime, UTC
+from enum import Enum
+from typing import List, Optional, Dict, Any
 
-from .knowledge import KnowledgeChunk, AuthorityLevel
-from .conflict import Conflict
+from pydantic import BaseModel, Field
+
+from .knowledge import KnowledgeChunk
 
 
 class QuarantineReason(str, Enum):

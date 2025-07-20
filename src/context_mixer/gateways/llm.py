@@ -5,14 +5,12 @@ This module provides a gateway for interacting with LLMs, isolating the mojentic
 from the rest of the application.
 """
 
-import json
-from enum import Enum
-from typing import List, Optional, Type, TypeVar, Dict, Any, Union
 from datetime import datetime
+from enum import Enum
+from typing import List, Optional, Type, TypeVar, Dict, Any
 
 from mojentic.llm import LLMBroker, LLMMessage
 from pydantic import BaseModel, Field
-
 
 T = TypeVar('T', bound=BaseModel)
 

@@ -2,9 +2,9 @@
 Tests for timing utilities.
 """
 
-import pytest
 import time
-from unittest.mock import patch
+
+import pytest
 
 from context_mixer.utils.timing import (
     TimingResult,

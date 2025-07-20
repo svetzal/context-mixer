@@ -26,8 +26,6 @@ from context_mixer.commands.ingest import IngestCommand
 from context_mixer.commands.open import OpenCommand
 from context_mixer.commands.slice import SliceCommand
 from context_mixer.commands.assemble import AssembleCommand
-from context_mixer.utils.progress import ProgressTracker
-from context_mixer.utils.cli_progress import CLIProgressObserver
 from context_mixer.utils.event_driven_progress import create_cli_progress_tracker
 from context_mixer.commands.quarantine import (
     QuarantineListCommand,

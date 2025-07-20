@@ -7,15 +7,16 @@ It shows how events are published and handled throughout the system.
 
 import asyncio
 from pathlib import Path
-from rich.console import Console
 from unittest.mock import MagicMock
 
-from context_mixer.domain.events import (
-    get_event_bus, ChunksIngestedEvent, ConflictDetectedEvent, ConflictResolvedEvent
-)
+from rich.console import Console
+
 from context_mixer.commands.base import CommandContext
 from context_mixer.commands.ingest import IngestCommand
 from context_mixer.config import Config
+from context_mixer.domain.events import (
+    get_event_bus, ChunksIngestedEvent, ConflictDetectedEvent, ConflictResolvedEvent
+)
 from context_mixer.domain.knowledge_store import KnowledgeStore
 
 

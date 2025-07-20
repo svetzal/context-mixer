@@ -6,16 +6,15 @@ showing how progress tracking can be decoupled from direct dependency injection
 by using events instead.
 """
 
-import asyncio
-from pathlib import Path
-from rich.console import Console
 from unittest.mock import MagicMock
 
+from rich.console import Console
+
 from context_mixer.domain.events import get_event_bus
+from context_mixer.utils.cli_progress import CLIProgressObserver
 from context_mixer.utils.event_driven_progress import (
     EventPublishingProgressTracker, EventDrivenProgressTracker, create_cli_progress_tracker
 )
-from context_mixer.utils.cli_progress import CLIProgressObserver
 
 
 def demo_basic_event_driven_progress():

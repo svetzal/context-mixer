@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock
 
 from context_mixer.commands.operations.merge import (

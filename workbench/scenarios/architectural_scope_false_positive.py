@@ -11,9 +11,8 @@ not conflicting. This scenario validates the fix for the false positive
 conflict detection issue.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from typing import Dict, List
 
 
 @dataclass

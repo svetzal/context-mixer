@@ -5,9 +5,9 @@ Tests for commit operations.
 import pytest
 
 from context_mixer.commands.operations.commit import CommitOperation
+from context_mixer.domain.commit_message import CommitMessage
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
-from context_mixer.domain.commit_message import CommitMessage
 
 
 @pytest.fixture

@@ -6,8 +6,6 @@ detection and intelligent content chunking capabilities.
 """
 
 import pytest
-from unittest.mock import MagicMock
-from typing import List
 
 from context_mixer.domain.chunking_engine import (
     ChunkingEngine,

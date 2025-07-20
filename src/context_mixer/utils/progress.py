@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 
 class ProgressStatus(Enum):

@@ -5,11 +5,12 @@ This adapter implements the CRAFT principle of Transcendence by isolating
 ChromaDB implementation details from the domain layer.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
+
 from context_mixer.domain.knowledge import (
-    KnowledgeChunk, 
-    SearchQuery, 
-    SearchResult, 
+    KnowledgeChunk,
+    SearchQuery,
+    SearchResult,
     SearchResults,
     ChunkMetadata,
     ProvenanceInfo,

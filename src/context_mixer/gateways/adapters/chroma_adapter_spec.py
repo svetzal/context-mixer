@@ -7,7 +7,7 @@ what we own (our adapter logic) rather than what we don't own (ChromaDB).
 """
 
 import pytest
-from context_mixer.gateways.adapters.chroma_adapter import ChromaAdapter
+
 from context_mixer.domain.knowledge import (
     KnowledgeChunk,
     SearchQuery,
@@ -18,6 +18,7 @@ from context_mixer.domain.knowledge import (
     GranularityLevel,
     TemporalScope
 )
+from context_mixer.gateways.adapters.chroma_adapter import ChromaAdapter
 
 
 @pytest.fixture

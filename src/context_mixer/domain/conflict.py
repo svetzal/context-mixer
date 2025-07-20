@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from .context import Context, ContextAnalysis
+from pydantic import BaseModel, Field
+
+from .context import Context
 
 
 class ConflictingGuidance(BaseModel):

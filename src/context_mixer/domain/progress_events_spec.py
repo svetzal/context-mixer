@@ -1,6 +1,6 @@
+from datetime import datetime, UTC
+
 import pytest
-from unittest.mock import MagicMock
-from datetime import datetime
 
 from context_mixer.domain.progress_events import (
     ProgressStartedEvent, ProgressUpdatedEvent, ProgressCompletedEvent, ProgressFailedEvent
@@ -69,7 +69,7 @@ class DescribeProgressStartedEvent:
     def should_set_correct_event_type(self):
         event = ProgressStartedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             operation_id="test_op",
             operation_name="Test Operation",
@@ -91,7 +91,7 @@ class DescribeProgressUpdatedEvent:
     def should_set_correct_event_type(self):
         event = ProgressUpdatedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             operation_id="test_op",
             operation_name="Test Operation",
@@ -120,7 +120,7 @@ class DescribeProgressUpdatedEvent:
     def should_handle_zero_total_in_percentage(self):
         event = ProgressUpdatedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             operation_id="test_op",
             operation_name="Test Operation",
@@ -133,7 +133,7 @@ class DescribeProgressUpdatedEvent:
     def should_cap_percentage_at_100(self):
         event = ProgressUpdatedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             operation_id="test_op",
             operation_name="Test Operation",
@@ -148,7 +148,7 @@ class DescribeProgressCompletedEvent:
     def should_set_correct_event_type(self):
         event = ProgressCompletedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             operation_id="test_op",
             operation_name="Test Operation"
@@ -168,7 +168,7 @@ class DescribeProgressFailedEvent:
     def should_set_correct_event_type(self):
         event = ProgressFailedEvent(
             event_id="test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             event_type="",
             operation_id="test_op",
             operation_name="Test Operation",

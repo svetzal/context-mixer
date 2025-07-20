@@ -5,22 +5,20 @@ This module tests the functionality of assembling context fragments for specific
 using the CRAFT (Context-Aware Retrieval and Fusion Technology) system.
 """
 
-import pytest
 import asyncio
-from pathlib import Path
-from typing import List
 from unittest.mock import AsyncMock
 
+import pytest
 from rich.console import Console
 
-from context_mixer.config import Config
 from context_mixer.commands.assemble import do_assemble
 from context_mixer.commands.assembly_strategies import AssemblyStrategyFactory
+from context_mixer.config import Config
 from context_mixer.domain.knowledge import (
-    KnowledgeChunk, 
-    ChunkMetadata, 
-    AuthorityLevel, 
-    GranularityLevel, 
+    KnowledgeChunk,
+    ChunkMetadata,
+    AuthorityLevel,
+    GranularityLevel,
     TemporalScope,
     ProvenanceInfo
 )

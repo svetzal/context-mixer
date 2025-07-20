@@ -1,12 +1,9 @@
 from pathlib import Path
 from typing import List, Optional
 
-import chromadb
-from chromadb import Settings
-
 from context_mixer.domain.knowledge import (
-    KnowledgeChunk, 
-    SearchQuery, 
+    KnowledgeChunk,
+    SearchQuery,
     SearchResults
 )
 from context_mixer.gateways.adapters.chroma_adapter import ChromaAdapter

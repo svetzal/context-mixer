@@ -1,10 +1,11 @@
-import pytest
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+from rich.console import Console
 
 from context_mixer.commands.base import Command, CommandContext, CommandResult
 from context_mixer.config import Config
-from rich.console import Console
 from context_mixer.domain.events import EventBus
 
 

@@ -2,12 +2,13 @@
 Tests for the merge operations.
 """
 
-import asyncio
 import pytest
 
-from context_mixer.commands.operations.merge import format_conflict_resolutions, detect_conflicts_async, detect_conflicts_batch, detect_conflicts
+from context_mixer.commands.operations.merge import format_conflict_resolutions, \
+    detect_conflicts_async, detect_conflicts_batch, detect_conflicts
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance, ConflictList
-from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, AuthorityLevel, ProvenanceInfo, GranularityLevel, TemporalScope
+from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, AuthorityLevel, \
+    ProvenanceInfo, GranularityLevel, TemporalScope
 from context_mixer.gateways.llm import MockLLMGateway
 
 

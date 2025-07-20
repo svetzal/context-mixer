@@ -3,9 +3,8 @@ Tests for context detection functionality.
 """
 
 import pytest
-from typing import List
 
-from context_mixer.domain.context import Context, ContextType, ContextAnalysis
+from context_mixer.domain.context import ContextType, ContextAnalysis
 from context_mixer.domain.context_detection import (
     ContextDetector,
     ArchitecturalContextDetector,

@@ -1,10 +1,11 @@
 from typing import List, Optional
+
 from rich.console import Console
 
 from context_mixer.domain.conflict import Conflict
 from context_mixer.domain.context import Context, ContextType
-from context_mixer.domain.context_detection import ContextDetectionEngine
 from context_mixer.domain.context_aware_prompts import ContextAwarePromptBuilder
+from context_mixer.domain.context_detection import ContextDetectionEngine
 from context_mixer.gateways.llm import LLMGateway
 from .conflict_resolution_strategies import ConflictResolutionStrategy
 

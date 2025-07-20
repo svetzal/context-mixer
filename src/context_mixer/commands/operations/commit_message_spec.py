@@ -6,8 +6,8 @@ import pytest
 from mojentic.llm import MessageRole
 
 from context_mixer.commands.operations.commit_message import generate_commit_message
-from context_mixer.gateways.llm import LLMGateway
 from context_mixer.domain.commit_message import CommitMessage
+from context_mixer.gateways.llm import LLMGateway
 
 
 @pytest.fixture

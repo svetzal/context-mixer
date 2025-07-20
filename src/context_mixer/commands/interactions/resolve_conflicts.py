@@ -1,11 +1,10 @@
 from typing import List, Optional, Protocol
 
-from context_mixer.domain.conflict import Conflict
 from context_mixer.commands.interactions.conflict_resolution_strategies import (
-    ConflictResolutionStrategy,
     UserInteractiveResolutionStrategy,
     ConflictResolutionContext
 )
+from context_mixer.domain.conflict import Conflict
 
 
 class ConflictResolver(Protocol):

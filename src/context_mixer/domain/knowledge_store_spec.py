@@ -5,15 +5,11 @@ This module tests the storage-agnostic KnowledgeStore interface and its
 concrete implementations, ensuring they follow CRAFT principles.
 """
 
-import pytest
-import asyncio
 import tempfile
 from pathlib import Path
-from typing import List
-from unittest.mock import AsyncMock, MagicMock
 
-from context_mixer.domain.knowledge_store import KnowledgeStore, StorageError, KnowledgeStoreFactory
-from context_mixer.domain.vector_knowledge_store import VectorKnowledgeStore
+import pytest
+
 from context_mixer.domain.knowledge import (
     KnowledgeChunk,
     ChunkMetadata,
@@ -25,6 +21,8 @@ from context_mixer.domain.knowledge import (
     GranularityLevel,
     TemporalScope
 )
+from context_mixer.domain.knowledge_store import StorageError, KnowledgeStoreFactory
+from context_mixer.domain.vector_knowledge_store import VectorKnowledgeStore
 
 
 @pytest.fixture

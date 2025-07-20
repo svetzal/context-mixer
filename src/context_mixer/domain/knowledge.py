@@ -5,9 +5,10 @@ This module contains the core domain objects for representing knowledge chunks,
 search queries, and search results in the Context Mixer application.
 """
 
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class AuthorityLevel(str, Enum):

@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
-from pathlib import Path
 
 from rich.console import Console
+
 from context_mixer.config import Config
-from context_mixer.gateways.llm import LLMGateway
-from context_mixer.gateways.git import GitGateway
-from context_mixer.domain.knowledge_store import KnowledgeStore
 from context_mixer.domain.events import EventBus, get_event_bus
+from context_mixer.domain.knowledge_store import KnowledgeStore
+from context_mixer.gateways.git import GitGateway
+from context_mixer.gateways.llm import LLMGateway
 
 
 @dataclass

@@ -6,19 +6,17 @@ using ChromaDB as the vector database backend.
 """
 
 import asyncio
-from typing import List, Optional, Dict, Any
 from pathlib import Path
+from typing import List, Optional, Dict, Any
 
-from .knowledge_store import KnowledgeStore, StorageError
 from .knowledge import (
     KnowledgeChunk,
     SearchQuery,
     SearchResults,
-    SearchResult,
     AuthorityLevel,
-    GranularityLevel,
     TemporalScope
 )
+from .knowledge_store import KnowledgeStore, StorageError
 from ..gateways.chroma import ChromaGateway
 
 

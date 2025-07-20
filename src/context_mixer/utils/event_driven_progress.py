@@ -1,12 +1,13 @@
 from typing import Optional
+
 from rich.console import Console
 
 from context_mixer.domain.events import EventBus, get_event_bus
 from context_mixer.domain.progress_events import (
     ProgressStartedEvent, ProgressUpdatedEvent, ProgressCompletedEvent, ProgressFailedEvent
 )
-from .progress import ProgressObserver, ProgressUpdate, ProgressStatus
 from .cli_progress import CLIProgressObserver
+from .progress import ProgressObserver, ProgressUpdate, ProgressStatus
 
 
 class EventDrivenProgressTracker:

@@ -7,18 +7,18 @@ in content and create concept-based knowledge chunks following CRAFT principles.
 
 import hashlib
 import re
-from typing import List, Optional, Dict, Any
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field
 from mojentic.llm import LLMMessage, MessageRole
+from pydantic import BaseModel, Field
 
 from context_mixer.domain.knowledge import (
-    KnowledgeChunk, 
-    ChunkMetadata, 
-    AuthorityLevel, 
-    GranularityLevel, 
+    KnowledgeChunk,
+    ChunkMetadata,
+    AuthorityLevel,
+    GranularityLevel,
     TemporalScope,
     ProvenanceInfo
 )

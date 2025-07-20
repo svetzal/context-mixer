@@ -1,4 +1,3 @@
-from pathlib import Path
 from rich.panel import Panel
 
 from .base import Command, CommandContext, CommandResult

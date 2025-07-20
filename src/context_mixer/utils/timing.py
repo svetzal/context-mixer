@@ -7,8 +7,8 @@ throughout the application to measure key operation durations.
 
 import time
 from contextlib import contextmanager
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 
 
 @dataclass

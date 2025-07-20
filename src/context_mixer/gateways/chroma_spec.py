@@ -8,12 +8,10 @@ These tests focus on testing our adapter logic by mocking ChromaDB operations,
 following the principle of "don't test what you don't own".
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-from context_mixer.gateways.chroma import ChromaGateway
-from context_mixer.gateways.adapters.chroma_adapter import ChromaAdapter
+import pytest
+
 from context_mixer.domain.knowledge import (
     KnowledgeChunk,
     SearchQuery,
@@ -24,6 +22,7 @@ from context_mixer.domain.knowledge import (
     GranularityLevel,
     TemporalScope
 )
+from context_mixer.gateways.chroma import ChromaGateway
 
 
 @pytest.fixture

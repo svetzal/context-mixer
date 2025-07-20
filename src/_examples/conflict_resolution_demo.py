@@ -7,8 +7,10 @@ This script shows the enhanced UserInteractiveResolutionStrategy which now inclu
 """
 
 from rich.console import Console
+
+from context_mixer.commands.interactions.conflict_resolution_strategies import \
+    UserInteractiveResolutionStrategy
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
-from context_mixer.commands.interactions.conflict_resolution_strategies import UserInteractiveResolutionStrategy
 
 
 def demo_conflict_resolution_options():
