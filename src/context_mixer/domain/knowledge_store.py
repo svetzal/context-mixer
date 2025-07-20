@@ -252,10 +252,12 @@ class KnowledgeStoreFactory:
         llm_gateway=None,
         pool_size: int = 5,
         max_pool_size: int = 10,
-        connection_timeout: float = 30.0
+        connection_timeout: float = 30.0,
+        clustering_config=None,
+        enable_clustering: bool = True
     ) -> "VectorKnowledgeStore":
         """
-        Create a vector-based knowledge store using ChromaDB with connection pooling.
+        Create a vector-based knowledge store using ChromaDB with connection pooling and clustering.
 
         Args:
             db_path: Path to the database directory
@@ -263,9 +265,11 @@ class KnowledgeStoreFactory:
             pool_size: Initial number of connections in the connection pool
             max_pool_size: Maximum number of connections in the connection pool
             connection_timeout: Timeout in seconds for getting a connection from the pool
+            clustering_config: Optional configuration for HDBSCAN clustering
+            enable_clustering: Whether to enable clustering optimization
 
         Returns:
-            VectorKnowledgeStore instance with connection pooling enabled
+            VectorKnowledgeStore instance with connection pooling and clustering enabled
         """
         from .vector_knowledge_store import VectorKnowledgeStore
         return VectorKnowledgeStore(
@@ -273,7 +277,9 @@ class KnowledgeStoreFactory:
             llm_gateway=llm_gateway,
             pool_size=pool_size,
             max_pool_size=max_pool_size,
-            connection_timeout=connection_timeout
+            connection_timeout=connection_timeout,
+            clustering_config=clustering_config,
+            enable_clustering=enable_clustering
         )
 
     @staticmethod

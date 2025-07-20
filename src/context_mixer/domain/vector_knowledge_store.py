@@ -2,12 +2,14 @@
 Vector-based knowledge store implementation using ChromaDB.
 
 This module provides a concrete implementation of the KnowledgeStore interface
-using ChromaDB as the vector database backend.
+using ChromaDB as the vector database backend with HDBSCAN clustering optimization.
 """
 
 import asyncio
+import logging
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+import numpy as np
 
 from .knowledge_store import KnowledgeStore, StorageError
 from .knowledge import (
@@ -19,6 +21,7 @@ from .knowledge import (
     GranularityLevel,
     TemporalScope
 )
+from .clustering import KnowledgeClusterer, ClusteringConfig
 from ..gateways.chroma import ChromaGateway
 
 
@@ -28,7 +31,8 @@ class VectorKnowledgeStore(KnowledgeStore):
 
     This implementation provides semantic search capabilities through vector
     embeddings while maintaining the storage-agnostic interface defined
-    by the KnowledgeStore abstract class.
+    by the KnowledgeStore abstract class. It includes HDBSCAN clustering
+    optimization for conflict detection.
     """
 
     def __init__(
@@ -37,7 +41,9 @@ class VectorKnowledgeStore(KnowledgeStore):
         llm_gateway=None,
         pool_size: int = 5,
         max_pool_size: int = 10,
-        connection_timeout: float = 30.0
+        connection_timeout: float = 30.0,
+        clustering_config: Optional[ClusteringConfig] = None,
+        enable_clustering: bool = True
     ):
         """
         Initialize the vector knowledge store.
@@ -48,6 +54,8 @@ class VectorKnowledgeStore(KnowledgeStore):
             pool_size: Initial number of connections in the connection pool
             max_pool_size: Maximum number of connections in the connection pool
             connection_timeout: Timeout in seconds for getting a connection from the pool
+            clustering_config: Configuration for HDBSCAN clustering
+            enable_clustering: Whether to enable clustering optimization
         """
         self.db_path = db_path
         self._gateway: Optional[ChromaGateway] = None
@@ -55,6 +63,20 @@ class VectorKnowledgeStore(KnowledgeStore):
         self.pool_size = pool_size
         self.max_pool_size = max_pool_size
         self.connection_timeout = connection_timeout
+        
+        # Clustering components
+        self.enable_clustering = enable_clustering
+        self.clustering_config = clustering_config or ClusteringConfig()
+        self._clusterer: Optional[KnowledgeClusterer] = None
+        self._clusters_dirty = True  # Flag to track if clusters need rebuilding
+        
+        if self.enable_clustering:
+            try:
+                self._clusterer = KnowledgeClusterer(self.clustering_config)
+                logging.info("HDBSCAN clustering enabled for conflict detection optimization")
+            except ImportError:
+                logging.warning("HDBSCAN not available. Clustering disabled.")
+                self.enable_clustering = False
 
     def _get_gateway(self) -> ChromaGateway:
         """Get or create the ChromaDB gateway instance."""
@@ -83,6 +105,8 @@ class VectorKnowledgeStore(KnowledgeStore):
             await asyncio.get_event_loop().run_in_executor(
                 None, gateway.store_knowledge_chunks, chunks
             )
+            # Mark clusters as dirty since we added new chunks
+            self._clusters_dirty = True
         except Exception as e:
             raise StorageError(f"Failed to store chunks: {str(e)}", e)
 
@@ -254,11 +278,10 @@ class VectorKnowledgeStore(KnowledgeStore):
 
     async def detect_conflicts(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
         """
-        Detect potential conflicts with existing knowledge using comprehensive analysis.
+        Detect potential conflicts with existing knowledge using clustering optimization.
 
-        This implementation checks all chunks in the same domains, not just semantically
-        similar ones, to ensure we catch conflicts that might use different wording
-        but address the same topics.
+        This implementation uses HDBSCAN clustering to reduce the number of expensive
+        LLM-based conflict checks by only comparing chunks within the same or nearby clusters.
 
         Args:
             chunk: KnowledgeChunk to check for conflicts
@@ -272,35 +295,149 @@ class VectorKnowledgeStore(KnowledgeStore):
         try:
             conflicts = []
 
-            # Get all chunks in the same domains as the input chunk
-            # This ensures we check for conflicts across all related content,
-            # not just semantically similar content
-            for domain in chunk.metadata.domains:
-                domain_query = SearchQuery(
-                    text="*",  # Match all content
-                    domains=[domain],
-                    max_results=100  # Get more results to be comprehensive
-                )
-                domain_results = await self.search(domain_query)
-
-                for result in domain_results.results:
-                    candidate = result.chunk
-
-                    # Skip the chunk itself
-                    if candidate.id == chunk.id:
-                        continue
-
-                    # Skip if we've already checked this candidate
-                    if candidate in conflicts:
-                        continue
-
-                    # Use LLM-based conflict detection for accurate analysis
-                    if await self._llm_detect_conflict(chunk, candidate):
-                        conflicts.append(candidate)
+            if self.enable_clustering and self._clusterer:
+                # Use cluster-based conflict detection
+                conflicts = await self._cluster_based_conflict_detection(chunk)
+            else:
+                # Fall back to the original domain-based approach
+                conflicts = await self._domain_based_conflict_detection(chunk)
 
             return conflicts
         except Exception as e:
             raise StorageError(f"Failed to detect conflicts: {str(e)}", e)
+
+    async def _cluster_based_conflict_detection(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
+        """
+        Cluster-optimized conflict detection using HDBSCAN.
+        
+        This method significantly reduces the number of conflict checks by:
+        1. Ensuring clusters are up to date
+        2. Predicting which cluster the new chunk belongs to
+        3. Only checking conflicts within the same cluster and nearby clusters
+        
+        Args:
+            chunk: KnowledgeChunk to check for conflicts
+            
+        Returns:
+            List of potentially conflicting chunks
+        """
+        conflicts = []
+        
+        # Ensure clusters are up to date
+        await self._ensure_clusters_updated()
+        
+        if not self._clusterer or not self._clusterer._fitted:
+            # If clustering failed, fall back to domain-based detection
+            logging.warning("Clustering not available, falling back to domain-based conflict detection")
+            return await self._domain_based_conflict_detection(chunk)
+        
+        try:
+            # Get embedding for the new chunk
+            gateway = self._get_gateway()
+            chunk_embedding = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: gateway._get_embedding_for_chunk(chunk)
+            )
+            
+            if chunk_embedding is None:
+                # If we can't get embedding, fall back to domain-based detection
+                return await self._domain_based_conflict_detection(chunk)
+            
+            # Predict cluster for the new chunk
+            predicted_cluster, confidence = self._clusterer.predict_cluster(chunk_embedding)
+            
+            # Get chunks to check based on cluster prediction
+            candidate_chunks = []
+            
+            if predicted_cluster != -1:
+                # Check chunks in the same cluster
+                same_cluster_chunk_ids = self._clusterer.get_chunks_in_cluster(predicted_cluster)
+                same_cluster_chunks = await self._get_chunks_by_ids(list(same_cluster_chunk_ids))
+                candidate_chunks.extend(same_cluster_chunks)
+                
+                # Check chunks in nearby clusters (for boundary cases)
+                nearby_clusters = self._clusterer.get_nearby_clusters(predicted_cluster)
+                for nearby_cluster in nearby_clusters[:3]:  # Limit to 3 nearby clusters
+                    nearby_chunk_ids = self._clusterer.get_chunks_in_cluster(nearby_cluster)
+                    nearby_chunks = await self._get_chunks_by_ids(list(nearby_chunk_ids))
+                    candidate_chunks.extend(nearby_chunks)
+            else:
+                # If predicted as noise, check against a sample of existing chunks
+                # to avoid missing potential conflicts
+                all_chunks = await self.get_all_chunks()
+                # Sample up to 50 chunks for conflict checking (much better than checking all)
+                candidate_chunks = all_chunks[:50] if len(all_chunks) > 50 else all_chunks
+            
+            # Now perform LLM-based conflict detection only on candidate chunks
+            for candidate in candidate_chunks:
+                # Skip the chunk itself
+                if candidate.id == chunk.id:
+                    continue
+                
+                # Skip if we've already checked this candidate
+                if candidate in conflicts:
+                    continue
+                
+                # Use LLM-based conflict detection for accurate analysis
+                if await self._llm_detect_conflict(chunk, candidate):
+                    conflicts.append(candidate)
+            
+            # Log performance improvement
+            total_chunks = len(await self.get_all_chunks())
+            checked_chunks = len(candidate_chunks)
+            if total_chunks > 0:
+                reduction = (1 - checked_chunks / total_chunks) * 100
+                logging.info(f"Clustering optimization: checked {checked_chunks}/{total_chunks} chunks "
+                           f"({reduction:.1f}% reduction in conflict checks)")
+            
+            return conflicts
+            
+        except Exception as e:
+            logging.warning(f"Cluster-based conflict detection failed: {e}. "
+                          f"Falling back to domain-based detection.")
+            return await self._domain_based_conflict_detection(chunk)
+
+    async def _domain_based_conflict_detection(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
+        """
+        Original domain-based conflict detection (fallback method).
+        
+        This method checks all chunks in the same domains, which can be expensive
+        for large knowledge bases but provides comprehensive conflict detection.
+        
+        Args:
+            chunk: KnowledgeChunk to check for conflicts
+            
+        Returns:
+            List of potentially conflicting chunks
+        """
+        conflicts = []
+
+        # Get all chunks in the same domains as the input chunk
+        # This ensures we check for conflicts across all related content,
+        # not just semantically similar content
+        for domain in chunk.metadata.domains:
+            domain_query = SearchQuery(
+                text="*",  # Match all content
+                domains=[domain],
+                max_results=100  # Get more results to be comprehensive
+            )
+            domain_results = await self.search(domain_query)
+
+            for result in domain_results.results:
+                candidate = result.chunk
+
+                # Skip the chunk itself
+                if candidate.id == chunk.id:
+                    continue
+
+                # Skip if we've already checked this candidate
+                if candidate in conflicts:
+                    continue
+
+                # Use LLM-based conflict detection for accurate analysis
+                if await self._llm_detect_conflict(chunk, candidate):
+                    conflicts.append(candidate)
+
+        return conflicts
 
     async def find_similar_chunks(self, chunk: KnowledgeChunk, similarity_threshold: float = 0.7) -> List[KnowledgeChunk]:
         """
@@ -344,7 +481,121 @@ class VectorKnowledgeStore(KnowledgeStore):
         except Exception as e:
             raise StorageError(f"Failed to find similar chunks: {str(e)}", e)
 
-    def _is_potential_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
+    async def _ensure_clusters_updated(self) -> None:
+        """
+        Ensure that clusters are up to date with the current knowledge base.
+        
+        This method rebuilds clusters if they are marked as dirty (e.g., after
+        new chunks are added to the knowledge store).
+        """
+        if not self.enable_clustering or not self._clusterer:
+            return
+        
+        if not self._clusters_dirty and self._clusterer._fitted:
+            return  # Clusters are up to date
+        
+        try:
+            # Get all chunks and their embeddings
+            all_chunks = await self.get_all_chunks()
+            
+            if len(all_chunks) < self.clustering_config.min_cluster_size:
+                logging.info(f"Not enough chunks ({len(all_chunks)}) for clustering. "
+                           f"Minimum required: {self.clustering_config.min_cluster_size}")
+                return
+            
+            # Get embeddings for all chunks
+            gateway = self._get_gateway()
+            chunk_ids = [chunk.id for chunk in all_chunks]
+            embeddings_data = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: gateway._get_embeddings_for_chunks(chunk_ids)
+            )
+            
+            if embeddings_data is None or len(embeddings_data) == 0:
+                logging.warning("Could not retrieve embeddings for clustering")
+                return
+            
+            embeddings = np.array(embeddings_data)
+            
+            # Fit the clusterer
+            logging.info(f"Rebuilding clusters for {len(all_chunks)} chunks")
+            cluster_metadata = self._clusterer.fit(embeddings, chunk_ids)
+            
+            # Log clustering results
+            stats = self._clusterer.get_cluster_stats()
+            logging.info(f"Clustering complete: {stats}")
+            
+            self._clusters_dirty = False
+            
+        except Exception as e:
+            logging.error(f"Failed to update clusters: {e}")
+            # Don't raise - clustering is an optimization, not a requirement
+
+    async def _get_chunks_by_ids(self, chunk_ids: List[str]) -> List[KnowledgeChunk]:
+        """
+        Retrieve multiple chunks by their IDs.
+        
+        Args:
+            chunk_ids: List of chunk IDs to retrieve
+            
+        Returns:
+            List of KnowledgeChunk objects (may be shorter than input if some IDs not found)
+        """
+        chunks = []
+        for chunk_id in chunk_ids:
+            chunk = await self.get_chunk(chunk_id)
+            if chunk:
+                chunks.append(chunk)
+        return chunks
+
+    async def rebuild_clusters(self) -> Dict[str, Any]:
+        """
+        Manually rebuild clusters and return clustering statistics.
+        
+        This method can be called to force a cluster rebuild, which might be
+        useful after significant changes to the knowledge base.
+        
+        Returns:
+            Dictionary with clustering statistics
+        """
+        if not self.enable_clustering:
+            return {"error": "Clustering is disabled"}
+        
+        self._clusters_dirty = True
+        await self._ensure_clusters_updated()
+        
+        if self._clusterer:
+            return self._clusterer.get_cluster_stats()
+        else:
+            return {"error": "Clusterer not available"}
+
+    async def get_cluster_info(self, chunk_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get cluster information for a specific chunk.
+        
+        Args:
+            chunk_id: ID of the chunk to get cluster info for
+            
+        Returns:
+            Dictionary with cluster information or None if not available
+        """
+        if not self.enable_clustering or not self._clusterer:
+            return None
+        
+        await self._ensure_clusters_updated()
+        
+        if not self._clusterer._fitted:
+            return None
+        
+        cluster_id = self._clusterer.get_cluster_for_chunk(chunk_id)
+        cluster_chunks = self._clusterer.get_chunks_in_cluster(cluster_id)
+        
+        return {
+            "chunk_id": chunk_id,
+            "cluster_id": cluster_id,
+            "cluster_size": len(cluster_chunks),
+            "is_noise": cluster_id == -1,
+            "cluster_chunks": list(cluster_chunks)
+        }
         """
         Check if two chunks are potentially conflicting based on metadata.
 
@@ -474,7 +725,7 @@ class VectorKnowledgeStore(KnowledgeStore):
 
     async def get_stats(self) -> Dict[str, Any]:
         """
-        Get statistics about the knowledge store.
+        Get statistics about the knowledge store including clustering information.
 
         Returns:
             Dictionary containing store statistics
@@ -501,9 +752,16 @@ class VectorKnowledgeStore(KnowledgeStore):
                 "storage_type": "vector",
                 "backend": "chromadb",
                 "db_path": str(self.db_path),
-                "connection_pool": pool_stats
+                "connection_pool": pool_stats,
+                "clustering_enabled": self.enable_clustering
             }
 
+            # Add clustering statistics if available
+            if self.enable_clustering and self._clusterer:
+                await self._ensure_clusters_updated()
+                cluster_stats = self._clusterer.get_cluster_stats()
+                stats["clustering"] = cluster_stats
+            
             # Add domain and authority distribution if we have chunks
             if stats["total_chunks"] > 0:
                 try:

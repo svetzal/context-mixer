@@ -249,6 +249,84 @@ class ChromaGateway:
         """
         return self.connection_pool.get_stats()
 
+    def _get_embedding_for_chunk(self, chunk: KnowledgeChunk) -> Optional[List[float]]:
+        """
+        Get embedding for a single chunk.
+        
+        Args:
+            chunk: KnowledgeChunk to get embedding for
+            
+        Returns:
+            Embedding vector as list of floats, or None if not found
+        """
+        with self.connection_pool.get_connection() as connection:
+            collection = self._get_collection(connection.client)
+            
+            # First check if chunk already has an embedding
+            if chunk.embedding:
+                return chunk.embedding
+            
+            # Try to retrieve existing embedding from ChromaDB
+            results = collection.get(ids=[chunk.id], include=["embeddings"])
+            
+            if (results["ids"] and results["embeddings"] and 
+                len(results["embeddings"]) > 0 and results["embeddings"][0] is not None):
+                return results["embeddings"][0]
+            
+            # If no existing embedding, generate one by adding the chunk temporarily
+            try:
+                chroma_data = self.adapter.chunks_to_chroma_format([chunk])
+                collection.upsert(
+                    ids=chroma_data["ids"],
+                    documents=chroma_data["documents"], 
+                    metadatas=chroma_data["metadatas"],
+                    embeddings=chroma_data["embeddings"]  # Will be generated if None
+                )
+                
+                # Retrieve the generated embedding
+                results = collection.get(ids=[chunk.id], include=["embeddings"])
+                if (results["embeddings"] and len(results["embeddings"]) > 0 and 
+                    results["embeddings"][0] is not None):
+                    return results["embeddings"][0]
+            
+            except Exception:
+                pass
+            
+            return None
+
+    def _get_embeddings_for_chunks(self, chunk_ids: List[str]) -> Optional[List[List[float]]]:
+        """
+        Get embeddings for multiple chunks by their IDs.
+        
+        Args:
+            chunk_ids: List of chunk IDs to get embeddings for
+            
+        Returns:
+            List of embedding vectors, or None if retrieval fails
+        """
+        if not chunk_ids:
+            return []
+        
+        try:
+            with self.connection_pool.get_connection() as connection:
+                collection = self._get_collection(connection.client)
+                
+                results = collection.get(ids=chunk_ids, include=["embeddings"])
+                
+                if not results["embeddings"]:
+                    return None
+                
+                # Filter out None embeddings and maintain order
+                embeddings = []
+                for i, embedding in enumerate(results["embeddings"]):
+                    if embedding is not None:
+                        embeddings.append(embedding)
+                
+                return embeddings if embeddings else None
+                
+        except Exception:
+            return None
+
     def close(self) -> None:
         """
         Close the connection pool and clean up resources.

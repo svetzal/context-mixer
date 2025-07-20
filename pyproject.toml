@@ -23,6 +23,7 @@ dependencies = [
     "fastmcp",
     "chromadb",
     "chroma-hnswlib",
+    "hdbscan",
 ]
 
 [project.optional-dependencies]
