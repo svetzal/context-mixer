@@ -18,6 +18,8 @@ from context_mixer.commands.interactions.resolve_conflicts import resolve_confli
 from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
 from context_mixer.utils.progress import ProgressTracker, NoOpProgressObserver
+from context_mixer.utils.event_driven_progress import EventPublishingProgressTracker
+from context_mixer.domain.events import ChunksIngestedEvent, ConflictDetectedEvent, ConflictResolvedEvent, EventBus
 from .base import Command, CommandContext, CommandResult
 
 
@@ -71,7 +73,7 @@ class IngestCommand(Command):
                 detect_boundaries=detect_boundaries,
                 resolver=resolver,
                 knowledge_store=self.knowledge_store,
-                progress_tracker=context.parameters.get('progress_tracker')
+                event_bus=context.event_bus
             )
 
             return CommandResult(
@@ -282,7 +284,7 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
     return chunks_to_add
 
 
-async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None, progress_tracker: ProgressTracker=None):
+async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None, event_bus: EventBus=None):
     """
     Ingest existing prompt artifacts into the library using intelligent chunking.
 
@@ -299,15 +301,14 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                  resolved automatically without user input.
         knowledge_store: Optional injected knowledge store. If not provided, will create
                         a vector store using the factory pattern.
-        progress_tracker: Optional progress tracker for showing progress indicators.
-                         If not provided, will use a no-op tracker.
+        event_bus: Optional event bus for publishing events. If not provided, will use
+                  the global event bus.
     """
     # Disable tokenizer parallelism to avoid warnings when using async operations
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    # Initialize progress tracker if not provided
-    if progress_tracker is None:
-        progress_tracker = ProgressTracker(NoOpProgressObserver())
+    # Create event-driven progress tracker that publishes progress events
+    progress_tracker = EventPublishingProgressTracker(event_bus=event_bus, project_id=project_id)
 
     # Initialize timing collector for performance monitoring
     timing_collector = TimingCollector()
@@ -566,6 +567,39 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 # Handle conflicts if any were detected
                 if all_conflicts:
                     console.print(f"\n[yellow]Detected {len(all_conflicts)} conflict(s) that require resolution[/yellow]")
+
+                    # Publish ConflictDetectedEvent
+                    if event_bus:
+                        conflict_types = []
+                        affected_files = []
+                        for conflict in all_conflicts:
+                            # Extract conflict types from descriptions
+                            if "duplicate" in conflict.description.lower():
+                                conflict_types.append("duplicate_guidance")
+                            elif "conflicting" in conflict.description.lower():
+                                conflict_types.append("conflicting_rules")
+                            else:
+                                conflict_types.append("unknown_conflict")
+
+                            # Extract affected files from sources
+                            for guidance in conflict.conflicting_guidance:
+                                if guidance.source not in affected_files and guidance.source not in ["new", "existing"]:
+                                    affected_files.append(guidance.source)
+
+                        # If no specific files found, use the input path
+                        if not affected_files:
+                            affected_files = [str(path)] if path else ["unknown"]
+
+                        conflict_event = ConflictDetectedEvent(
+                            event_id="",
+                            timestamp=None,
+                            event_type="",
+                            project_id=project_id or "unknown",
+                            conflict_count=len(all_conflicts),
+                            conflict_types=list(set(conflict_types)),  # Remove duplicates
+                            affected_files=list(set(affected_files))   # Remove duplicates
+                        )
+                        event_bus.publish(conflict_event)
                     with time_operation("conflict_resolution", timing_collector) as resolution_timing:
                         resolved_conflicts = resolve_conflicts(all_conflicts, console, resolver)
 
@@ -574,6 +608,32 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
                     console.print(f"[dim]⚖️  Conflict resolution completed in {format_duration(resolution_timing.duration_seconds)}[/dim]")
                     console.print(f"[green]Conflicts resolved and applied. Proceeding with storage.[/green]")
+
+                    # Publish ConflictResolvedEvent
+                    if event_bus:
+                        # Count auto vs manual resolutions
+                        auto_resolved_count = 0
+                        manually_resolved_count = 0
+                        resolution_strategy = "unknown"
+
+                        if resolver:
+                            resolution_strategy = "automatic"
+                            auto_resolved_count = len(resolved_conflicts)
+                        else:
+                            resolution_strategy = "manual"
+                            manually_resolved_count = len(resolved_conflicts)
+
+                        resolved_event = ConflictResolvedEvent(
+                            event_id="",
+                            timestamp=None,
+                            event_type="",
+                            project_id=project_id or "unknown",
+                            resolved_conflict_count=len(resolved_conflicts),
+                            resolution_strategy=resolution_strategy,
+                            auto_resolved_count=auto_resolved_count,
+                            manually_resolved_count=manually_resolved_count
+                        )
+                        event_bus.publish(resolved_event)
                 else:
                     # No conflicts detected, store all remaining chunks
                     chunks_to_store.extend([chunk for chunk in valid_chunks if chunk not in chunks_to_store])
@@ -582,6 +642,26 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                     try:
                         await knowledge_store.store_chunks(chunks_to_store)
                         console.print(f"[green]Successfully stored {len(chunks_to_store)} chunks in vector knowledge store[/green]")
+
+                        # Publish ChunksIngestedEvent
+                        if event_bus:
+                            # Calculate processing time from timing collector
+                            processing_time = timing_collector.get_total_duration()
+
+                            # Get file paths that were processed
+                            file_paths = [str(f) for f in files_to_process] if 'files_to_process' in locals() else [str(path)] if path else []
+
+                            ingested_event = ChunksIngestedEvent(
+                                event_id="",
+                                timestamp=None,
+                                event_type="",
+                                project_id=project_id or "unknown",
+                                project_name=project_name or "unknown",
+                                chunk_count=len(chunks_to_store),
+                                file_paths=file_paths,
+                                processing_time_seconds=processing_time
+                            )
+                            event_bus.publish(ingested_event)
                     except Exception as e:
                         console.print(f"[red]Error: Failed to store chunks in vector store: {str(e)}[/red]")
                         console.print("[red]This is a critical error - user input data could not be stored properly in the vector store![/red]")
