@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-Provide a single command-line tool (with a roadmap toward optional desktop/UIs) that helps developers create, organise,
-merge and deploy reusable prompt instructions across multiple GenAI coding assistants (e.g., GitHub Copilot,
-Cursor/Windsor, Claude, Junie).
+Provide a single **command‑line tool** (with a roadmap toward optional desktop/UIs) that helps developers *create, organise, merge* and *deploy* reusable prompt instructions across multiple GenAI coding assistants (e.g., GitHub Copilot, Cursor/Windsor, Claude, Junie).
+
+The project leverages the **CRAFT** (Chunk, Resist, Adapt, Fit, Transcend) philosophy (in docs/craft-overview.md and THEORY.md) for intelligent knowledge management and context assembly.
 
 ## Identity and Branding Guidelines
 
@@ -15,18 +15,20 @@ As Context Mixer is a Mojility product, maintain a consistent identity and brand
     - Accent Green: #6bb660
     - Dark Grey: #666767
 
-# Universal Engineering Principles
+## Universal Engineering Principles
 
 - **Code is communication** — optimise for the next human reader.
 - **Simple Design Heuristics** — guiding principles, not iron laws; consult the user when you need to break them.
-  1. **All tests pass** — correctness is non‑negotiable.
-  2. **Reveals intent** — code should read like an explanation.
-  3. **No *****knowledge***** duplication** — avoid multiple spots that must change together; identical code is only a smell when it hides duplicate *decisions*.
-  4. **Minimal entities** — remove unnecessary indirection, classes, or parameters.
+    1. **All tests pass** — correctness is non‑negotiable.
+    2. **Reveals intent** — code should read like an explanation.
+    3. **No *****knowledge***** duplication** — avoid multiple spots that must change together; identical code is only a
+       smell when it hides duplicate *decisions*.
+    4. **Minimal entities** — remove unnecessary indirection, classes, or parameters.
 - **Small, safe increments** — single‑reason commits; avoid speculative work (**YAGNI**).
 - **Tests are the executable spec** — red first, green always; test behaviour not implementation.
 - **Compose over inherit**; favour pure functions where practical, avoid side-effects.
-- **Functional core, imperative shell** — isolate pure business logic from I/O and side effects; push mutations to the system boundaries, build mockable gateways at those boundaries.
+- **Functional core, imperative shell** — isolate pure business logic from I/O and side effects; push mutations to the
+  system boundaries, build mockable gateways at those boundaries.
 - **Psychological safety** — review code, not colleagues; critique ideas, not authors.
 - **Version‑control etiquette** — descriptive commit messages, branch from `main`, PRs require green CI.
 
@@ -34,25 +36,38 @@ As Context Mixer is a Mojility product, maintain a consistent identity and brand
 
 - Python 3.12+
 - Key Dependencies:
-    - pydantic 2: Data validation
-    - structlog: Logging
-    - ollama/openai: LLM integration
+    - mojentic: LLM integration and data validation
+    - typer: CLI framework
+    - rich: Rich text and beautiful formatting
+    - pyyaml: YAML parsing
+    - fastmcp: MCP (Model Context Protocol) support
+    - chromadb: Vector database
+    - chroma-hnswlib: HNSW indexing for ChromaDB
     - pytest: Testing
     - MkDocs: Documentation
 
 ## Project Structure
 
 - src/ # Python source code and tests
-    - commands/ # Command delegates for the Typer CLI interface
-        - operations/ # Elemental domain-specific operations (merge, sense conflicts)
-    - gateways/ # Gateways to isolate I/O (network, disk, etc.) from logic
-    - domain/ # Core logic and data structures for prompt management
-    - cli.py # Main program entry-point and command dispatcher
-    - config.py # Configuration storage and data-object
-- use-cases/ # Numbered end-user scenarios, simple to complex
+    - context_mixer/ # Main package
+        - commands/ # Command delegates for the Typer CLI interface
+            - operations/ # Elemental domain-specific operations (merge, sense conflicts)
+            - interactions/ # Interactive command components
+        - gateways/ # Gateways to isolate I/O (network, disk, etc.) from logic
+        - domain/ # Core logic and data structures for prompt management
+        - utils/ # Utility functions and helpers
+        - examples/ # Example code and demonstrations
+        - cli.py # Main program entry-point and command dispatcher
+        - config.py # Configuration storage and data-object
+        - spec_helpers.py # Testing utilities and helpers
+    - _examples/ # Example scripts and demonstrations
+- scenarios/ # End-user scenarios and use cases
 - docs/ # MkDocs documentation files
+- workbench/ # Development workspace and experiments
+- refs/ # Reference materials and documentation
 - README.md # Documentation for teammates and developers
 - SPEC.md # Original design thoughts from the creator
+- THEORY.md # Theoretical foundations and CRAFT philosophy
 - pyproject.toml # Python project metadata and dependencies
 
 ## Development Setup
@@ -98,7 +113,8 @@ As Context Mixer is a Mojility product, maintain a consistent identity and brand
 
 ### Using Mojentic
 
-When using Mojentic, unless you need the detailed logging, set it to warn. You must put this code in BEFORE ANY IMPORT STATEMENTS for the mojentic library.
+When using Mojentic, unless you need the detailed logging, set it to warn. You must put this code in BEFORE ANY IMPORT
+STATEMENTS for the mojentic library.
 
 ```
 import logging
@@ -231,7 +247,8 @@ from context_mixer.agents import BaseLLMAgent
 
 ## Procedural Guidelines
 
-When realizing we have accumulated some kind of technical debt, an issue with our approach, or a problem we will run into, incorporate the analysis for it into BACKLOG.md.
+When realizing we have accumulated some kind of technical debt, an issue with our approach, or a problem we will run
+into, incorporate the analysis for it into BACKLOG.md.
 
 When realizing we should consider a specific concern or feature in the future, incorporate it into PLAN.md.
 
