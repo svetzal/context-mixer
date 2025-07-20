@@ -477,8 +477,8 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
                     if chunk_pairs:
                         progress_tracker.start_operation("internal_conflicts", "Checking internal conflicts", len(chunk_pairs))
-                        # Use batch conflict detection for improved performance
-                        from context_mixer.commands.operations.merge import detect_conflicts_batch
+                        # Use clustering-aware batch conflict detection for improved performance
+                        from context_mixer.commands.operations.merge import detect_conflicts_batch_with_clustering
 
                         # Get batch size from config or use default of 5
                         batch_size = getattr(config, 'conflict_detection_batch_size', 5)
@@ -489,7 +489,14 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                             def progress_callback(completed_count):
                                 progress_tracker.update_progress("internal_conflicts", completed_count, f"Checked pair {completed_count}/{len(chunk_pairs)}")
 
-                            batch_results = await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size, progress_callback)
+                            # Use clustering optimization if available
+                            batch_results = await detect_conflicts_batch_with_clustering(
+                                chunk_pairs, 
+                                knowledge_store=knowledge_store,
+                                llm_gateway=llm_gateway, 
+                                batch_size=batch_size, 
+                                progress_callback=progress_callback
+                            )
 
                             # Process results and handle conflicts
                             for chunk1, chunk2, conflicts in batch_results:

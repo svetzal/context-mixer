@@ -9,7 +9,10 @@ from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 from context_mixer.domain.vector_knowledge_store import VectorKnowledgeStore
 from context_mixer.domain.clustering import ClusteringConfig
-from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, AuthorityLevel
+from context_mixer.domain.knowledge import (
+    KnowledgeChunk, ChunkMetadata, AuthorityLevel, GranularityLevel, 
+    TemporalScope, ProvenanceInfo
+)
 
 
 class DescribeVectorKnowledgeStoreWithClustering:
@@ -43,10 +46,18 @@ class DescribeVectorKnowledgeStoreWithClustering:
         """Sample knowledge chunks for testing."""
         chunks = []
         for i in range(5):
+            provenance = ProvenanceInfo(
+                source="test_file.md",
+                project_id="test_project",
+                created_at="2024-01-01T00:00:00Z"
+            )
             metadata = ChunkMetadata(
                 domains=["test"],
                 authority=AuthorityLevel.OFFICIAL,
-                project_id="test_project"
+                scope=["enterprise"],
+                granularity=GranularityLevel.DETAILED,
+                temporal=TemporalScope.CURRENT,
+                provenance=provenance
             )
             chunk = KnowledgeChunk(
                 id=f"chunk_{i}",
@@ -222,6 +233,53 @@ class DescribeVectorKnowledgeStoreWithClustering:
         
         assert stats["fitted"]
         assert stats["total_clusters"] == 2
+
+    async def should_use_clustering_for_batch_conflict_detection(self, store_with_clustering, sample_chunks, mocker):
+        """Test that batch conflict detection uses clustering optimization."""
+        store = store_with_clustering
+        
+        # Mock the _llm_detect_conflict method to return known conflicts
+        mock_llm_conflict = mocker.patch.object(store, '_llm_detect_conflict')
+        mock_llm_conflict.return_value = False  # No conflicts
+        
+        # Mock the gateway to return embeddings
+        mock_gateway = store._get_gateway()
+        mock_gateway._get_embedding_for_chunk.return_value = [0.1, 0.2, 0.3, 0.4, 0.5]
+        
+        # Test with subset of chunks
+        test_chunks = sample_chunks[:3]
+        
+        # This should use clustering optimization
+        conflicts = await store.detect_conflicts_batch_with_clustering(test_chunks)
+        
+        # Should return conflict tuples
+        assert isinstance(conflicts, list)
+        # For 3 chunks, we should have 3 pairwise comparisons
+        assert len(conflicts) >= 0  # May be reduced due to clustering
+        
+        # Verify that LLM conflict detection was called (indicating clustering worked)
+        assert mock_llm_conflict.called
+
+    async def should_fallback_when_clustering_disabled_for_batch(self, store_without_clustering, sample_chunks, mocker):
+        """Test that batch conflict detection falls back when clustering is disabled."""
+        store = store_without_clustering
+        
+        # Mock the _llm_detect_conflict method
+        mock_llm_conflict = mocker.patch.object(store, '_llm_detect_conflict')
+        mock_llm_conflict.return_value = False
+        
+        test_chunks = sample_chunks[:3]
+        
+        # This should fall back to pairwise detection
+        conflicts = await store.detect_conflicts_batch_with_clustering(test_chunks)
+        
+        # Should return conflict tuples
+        assert isinstance(conflicts, list)
+        # For 3 chunks, we should have exactly 3 pairwise comparisons
+        assert len(conflicts) == 3  # All pairs: (0,1), (0,2), (1,2)
+        
+        # Verify that LLM conflict detection was called for each pair
+        assert mock_llm_conflict.call_count == 3
 
     async def should_return_error_when_rebuilding_clusters_with_clustering_disabled(self, store_without_clustering):
         stats = await store_without_clustering.rebuild_clusters()

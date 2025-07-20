@@ -803,6 +803,123 @@ class VectorKnowledgeStore(KnowledgeStore):
         except Exception as e:
             raise StorageError(f"Failed to reset knowledge store: {str(e)}", e)
 
+    async def detect_conflicts_batch_with_clustering(self, chunks: List[KnowledgeChunk]) -> List[tuple]:
+        """
+        Detect conflicts between chunks in a batch using clustering optimization.
+        
+        This method creates temporary clusters for the batch of chunks and only
+        performs conflict detection between chunks in the same or nearby clusters,
+        significantly reducing the number of expensive LLM calls.
+        
+        Args:
+            chunks: List of KnowledgeChunk objects to check for conflicts
+            
+        Returns:
+            List of tuples (chunk1, chunk2, has_conflict) where has_conflict is boolean
+        """
+        if not chunks or len(chunks) < 2:
+            return []
+        
+        if not self.enable_clustering or not self._clusterer:
+            # Fall back to checking all pairs if clustering is disabled
+            return await self._detect_conflicts_batch_pairwise(chunks)
+        
+        try:
+            # Get embeddings for all chunks
+            gateway = self._get_gateway()
+            chunk_embeddings = []
+            chunk_ids = []
+            
+            for chunk in chunks:
+                embedding = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda c=chunk: gateway._get_embedding_for_chunk(c)
+                )
+                if embedding is not None:
+                    chunk_embeddings.append(embedding)
+                    chunk_ids.append(chunk.id)
+            
+            if len(chunk_embeddings) < self.clustering_config.min_cluster_size:
+                # Not enough data for clustering, fall back to pairwise
+                logging.info(f"Not enough chunks for clustering ({len(chunk_embeddings)}), "
+                           f"falling back to pairwise conflict detection")
+                return await self._detect_conflicts_batch_pairwise(chunks)
+            
+            # Create a temporary clusterer for this batch
+            from .clustering import KnowledgeClusterer
+            temp_clusterer = KnowledgeClusterer(self.clustering_config)
+            
+            # Fit the clusterer on the batch
+            embeddings_array = np.array(chunk_embeddings)
+            temp_clusterer.fit(embeddings_array, chunk_ids)
+            
+            # Group chunks by cluster
+            cluster_groups = {}
+            chunk_lookup = {chunk.id: chunk for chunk in chunks}
+            
+            for chunk_id in chunk_ids:
+                if chunk_id in chunk_lookup:
+                    cluster_id = temp_clusterer.get_cluster_for_chunk(chunk_id)
+                    if cluster_id not in cluster_groups:
+                        cluster_groups[cluster_id] = []
+                    cluster_groups[cluster_id].append(chunk_lookup[chunk_id])
+            
+            # Perform conflict detection within each cluster
+            conflicts = []
+            total_comparisons = 0
+            optimized_comparisons = 0
+            
+            for cluster_id, cluster_chunks in cluster_groups.items():
+                # Check all pairs within this cluster
+                for i, chunk1 in enumerate(cluster_chunks):
+                    for chunk2 in cluster_chunks[i+1:]:
+                        optimized_comparisons += 1
+                        has_conflict = await self._llm_detect_conflict(chunk1, chunk2)
+                        conflicts.append((chunk1, chunk2, has_conflict))
+                
+                # Also check against nearby clusters (for boundary cases)
+                if cluster_id != -1:  # Skip noise cluster for nearby checks
+                    nearby_clusters = temp_clusterer.get_nearby_clusters(cluster_id)
+                    for nearby_cluster_id in nearby_clusters[:2]:  # Limit to 2 nearby clusters
+                        if nearby_cluster_id in cluster_groups:
+                            nearby_chunks = cluster_groups[nearby_cluster_id]
+                            for chunk1 in cluster_chunks:
+                                for chunk2 in nearby_chunks:
+                                    optimized_comparisons += 1
+                                    has_conflict = await self._llm_detect_conflict(chunk1, chunk2)
+                                    conflicts.append((chunk1, chunk2, has_conflict))
+            
+            # Calculate statistics
+            total_comparisons = len(chunks) * (len(chunks) - 1) // 2
+            reduction = (1 - optimized_comparisons / total_comparisons) * 100 if total_comparisons > 0 else 0
+            
+            logging.info(f"Batch clustering optimization: {optimized_comparisons}/{total_comparisons} "
+                       f"conflict checks ({reduction:.1f}% reduction)")
+            
+            return conflicts
+            
+        except Exception as e:
+            logging.warning(f"Batch clustering failed: {e}. Falling back to pairwise detection.")
+            return await self._detect_conflicts_batch_pairwise(chunks)
+    
+    async def _detect_conflicts_batch_pairwise(self, chunks: List[KnowledgeChunk]) -> List[tuple]:
+        """
+        Fallback method for pairwise conflict detection without clustering.
+        
+        Args:
+            chunks: List of KnowledgeChunk objects to check for conflicts
+            
+        Returns:
+            List of tuples (chunk1, chunk2, has_conflict) where has_conflict is boolean
+        """
+        conflicts = []
+        
+        for i, chunk1 in enumerate(chunks):
+            for chunk2 in chunks[i+1:]:
+                has_conflict = await self._llm_detect_conflict(chunk1, chunk2)
+                conflicts.append((chunk1, chunk2, has_conflict))
+        
+        return conflicts
+
     async def close(self) -> None:
         """
         Close the knowledge store and clean up resources.

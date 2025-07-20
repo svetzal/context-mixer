@@ -1,11 +1,12 @@
 import asyncio
+import logging
 from textwrap import dedent
 from typing import List, Tuple
 
 from mojentic.llm import LLMMessage
 
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
-from context_mixer.domain.conflict import ConflictList
+from context_mixer.domain.conflict import ConflictList, Conflict, ConflictingGuidance
 from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
 from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.domain.context_aware_prompts import ContextAwarePromptBuilder
@@ -64,6 +65,96 @@ async def detect_conflicts_async(existing_content: str,
     """
     # Run the synchronous detect_conflicts in a thread to avoid blocking
     return await asyncio.to_thread(detect_conflicts, existing_content, new_content, llm_gateway)
+
+
+async def detect_conflicts_batch_with_clustering(chunk_pairs: List[Tuple[KnowledgeChunk, KnowledgeChunk]], 
+                                              knowledge_store=None,
+                                              llm_gateway: LLMGateway = None,
+                                              batch_size: int = 5,
+                                              progress_callback=None) -> List[Tuple[KnowledgeChunk, KnowledgeChunk, ConflictList]]:
+    """
+    Detect conflicts between multiple chunk pairs using clustering optimization when available.
+
+    This function uses clustering optimization if a VectorKnowledgeStore with clustering
+    enabled is provided, otherwise falls back to the standard batch processing.
+
+    Args:
+        chunk_pairs: List of tuples containing pairs of chunks to check for conflicts
+        knowledge_store: Optional VectorKnowledgeStore with clustering support
+        llm_gateway: The LLM gateway to use for detecting conflicts (required if no knowledge_store)
+        batch_size: Number of conflict detections to process concurrently (default: 5)
+        progress_callback: Optional callback function to report progress as batches complete
+
+    Returns:
+        List of tuples containing (chunk1, chunk2, conflicts) for each pair
+    """
+    # Check if we can use clustering optimization
+    if (knowledge_store and 
+        hasattr(knowledge_store, 'detect_conflicts_batch_with_clustering') and
+        hasattr(knowledge_store, 'enable_clustering') and
+        knowledge_store.enable_clustering):
+        
+        # Extract unique chunks from pairs
+        unique_chunks = []
+        chunk_ids_seen = set()
+        
+        for chunk1, chunk2 in chunk_pairs:
+            if chunk1.id not in chunk_ids_seen:
+                unique_chunks.append(chunk1)
+                chunk_ids_seen.add(chunk1.id)
+            if chunk2.id not in chunk_ids_seen:
+                unique_chunks.append(chunk2)
+                chunk_ids_seen.add(chunk2.id)
+        
+        try:
+            # Use clustering-optimized batch conflict detection
+            cluster_conflicts = await knowledge_store.detect_conflicts_batch_with_clustering(unique_chunks)
+            
+            # Convert clustering results to the expected format
+            conflict_map = {}
+            for chunk1, chunk2, has_conflict in cluster_conflicts:
+                pair_key = (chunk1.id, chunk2.id)
+                reverse_key = (chunk2.id, chunk1.id)
+                
+                if has_conflict:
+                    # Create a basic conflict for the pair
+                    conflict = Conflict(
+                        description=f"Content conflict detected between chunks",
+                        conflicting_guidance=[
+                            ConflictingGuidance(content=chunk1.content, source=f"chunk {chunk1.id[:12]}..."),
+                            ConflictingGuidance(content=chunk2.content, source=f"chunk {chunk2.id[:12]}...")
+                        ]
+                    )
+                    conflicts = ConflictList(list=[conflict])
+                else:
+                    conflicts = ConflictList(list=[])
+                
+                conflict_map[pair_key] = conflicts
+                conflict_map[reverse_key] = conflicts
+            
+            # Build results for the original chunk pairs
+            results = []
+            for chunk1, chunk2 in chunk_pairs:
+                pair_key = (chunk1.id, chunk2.id)
+                conflicts = conflict_map.get(pair_key, ConflictList(list=[]))
+                results.append((chunk1, chunk2, conflicts))
+                
+                # Report progress if callback provided
+                if progress_callback:
+                    progress_callback(len(results))
+            
+            return results
+            
+        except Exception as e:
+            # Fall back to standard batch processing if clustering fails
+            logging.warning(f"Clustering-based conflict detection failed: {e}. "
+                          f"Falling back to standard batch processing.")
+    
+    # Fall back to standard batch processing
+    if not llm_gateway:
+        raise ValueError("LLM gateway is required when clustering optimization is not available")
+    
+    return await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size, progress_callback)
 
 
 async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, KnowledgeChunk]], 
