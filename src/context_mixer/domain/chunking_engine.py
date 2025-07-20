@@ -385,6 +385,7 @@ Your task is to analyze the given content and break it into complete, semantical
 2. Be semantically bounded to prevent knowledge interference
 3. Include all necessary context to be understood independently
 4. Follow domain separation principles (technical, business, design, etc.)
+5. RESPECT SIZE LIMITS based on granularity level
 
 For each chunk, you must provide:
 - Complete content (the full text of the chunk)
@@ -397,7 +398,15 @@ For each chunk, you must provide:
 - Dependencies (concepts this chunk requires)
 - Conflicts (concepts this chunk contradicts)
 
-CRITICAL: Do not try to preserve exact character positions or markdown formatting. Focus on semantic completeness and conceptual coherence. Each chunk should be a complete, self-contained unit of knowledge.
+CRITICAL SIZE CONSTRAINTS - Each chunk must respect these token limits:
+- summary: 50-100 tokens (roughly 40-80 words)
+- overview: 200-300 tokens (roughly 150-240 words)
+- detailed: 500-800 tokens (roughly 400-640 words)
+- comprehensive: 1000+ tokens (roughly 800+ words)
+
+Choose the appropriate granularity level for each chunk and ensure the content length matches that level. If content is too long for a granularity level, either split it into multiple chunks or choose a higher granularity level.
+
+CRITICAL: Do not try to preserve exact character positions or markdown formatting. Focus on semantic completeness and conceptual coherence while respecting size limits. Each chunk should be a complete, self-contained unit of knowledge within its size constraints.
 
 Output complete chunks directly - do not emit metadata about character positions or line numbers."""
                 ),
