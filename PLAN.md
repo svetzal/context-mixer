@@ -34,7 +34,46 @@ This updated plan focuses on the remaining high-impact features needed to comple
 
 ## Phase 1: Performance & Quality Enhancements (Months 1-2)
 
-### 1.1 Advanced Caching System
+### 1.1 HDBSCAN Clustering for Conflict Detection Optimization
+**Priority**: Critical - Performance Impact  
+**Story Points**: 21
+
+**Problem Statement**:
+Current conflict detection performs expensive pairwise comparisons between chunks, resulting in hundreds of thousands of LLM calls during ingestion (e.g., 535,095 internal conflict checks reported). This creates a significant performance bottleneck that makes large-scale knowledge ingestion impractical.
+
+**Implementation**:
+- Integrate HDBSCAN clustering algorithm to group semantically similar chunks
+- Pre-cluster existing knowledge chunks in embedding space using hierarchical density-based clustering
+- Implement cluster-aware conflict detection that only checks conflicts within same/nearby clusters
+- Use cluster representatives for initial conflict filtering before expensive LLM-based detection
+- Maintain cluster stability as knowledge base grows to avoid frequent re-clustering
+- Add cluster metadata to chunk storage for efficient cluster-based retrieval
+
+**Technical Approach**:
+- Add `hdbscan` dependency to project requirements
+- Extend VectorKnowledgeStore with clustering capabilities
+- Implement cluster-based conflict detection strategy
+- Create cluster maintenance operations for incremental updates
+- Add cluster visualization and analytics for monitoring cluster quality
+- **API Reference**: Complete HDBSCAN API documentation available in `refs/hdbscan.md`
+
+**Acceptance Criteria**:
+- [ ] HDBSCAN clustering integration with configurable parameters (min_cluster_size, min_samples)
+- [ ] Cluster-aware conflict detection reducing comparisons by 80%+ 
+- [ ] Cluster metadata storage and retrieval in ChromaDB
+- [ ] Incremental cluster updates for new chunks without full re-clustering
+- [ ] Performance benchmarks showing significant reduction in conflict detection time
+- [ ] Cluster quality metrics and monitoring (silhouette score, cluster stability)
+- [ ] Fallback to traditional conflict detection for edge cases
+- [ ] Documentation and examples for cluster-based conflict detection
+
+**Expected Impact**:
+- Reduce conflict detection time from O(n*m) to O(k*log(k)) where k << n*m
+- Enable practical ingestion of large knowledge bases (10K+ chunks)
+- Maintain conflict detection accuracy while dramatically improving performance
+- Provide foundation for other clustering-based optimizations
+
+### 1.2 Advanced Caching System
 **Priority**: High - Performance Impact  
 **Story Points**: 13
 
@@ -382,9 +421,10 @@ cmx benchmark --knowledge-base size --query-performance --accuracy-metrics
 ## Implementation Priority
 
 ### Immediate Focus (Next 3 months)
-1. **Advanced Caching System** - Critical for performance
-2. **Performance Monitoring** - Essential for system reliability
-3. **Integration Test Framework** - Required for quality assurance
+1. **HDBSCAN Clustering for Conflict Detection** - Critical for resolving performance bottleneck (535K+ conflict checks)
+2. **Advanced Caching System** - Critical for performance
+3. **Performance Monitoring** - Essential for system reliability
+4. **Integration Test Framework** - Required for quality assurance
 
 ### Medium Term (Months 4-6)
 1. **Adaptive Granularity** - Enhances user experience
