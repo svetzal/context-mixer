@@ -26,8 +26,7 @@ from context_mixer.commands.ingest import IngestCommand
 from context_mixer.commands.open import OpenCommand
 from context_mixer.commands.slice import SliceCommand
 from context_mixer.commands.assemble import AssembleCommand
-from context_mixer.utils.progress import ProgressTracker
-from context_mixer.utils.cli_progress import CLIProgressObserver
+# Removed unused imports: ProgressTracker, CLIProgressObserver
 from context_mixer.utils.event_driven_progress import create_cli_progress_tracker
 from context_mixer.commands.quarantine import (
     QuarantineListCommand,
@@ -57,6 +56,7 @@ git_gateway = GitGateway()
 openai_gateway = OpenAIGateway(api_key=os.environ.get("OPENAI_API_KEY"))
 # llm_gateway = LLMGateway(model="gpt-4.1", gateway=openai_gateway)
 llm_gateway = LLMGateway(model="o4-mini", gateway=openai_gateway)
+
 
 @app.command()
 def init(
@@ -148,7 +148,7 @@ def assemble(
     Assemble context fragments for a specific target.
 
     Collects relevant fragments, orders them, and renders them into the format
-    required by the specified target AI assistant. Use project_ids and 
+    required by the specified target AI assistant. Use project_ids and
     exclude_projects to control which project contexts are included to prevent
     cross-project contamination.
     """
@@ -288,7 +288,7 @@ def ingest(
     """
     Ingest existing context artifacts into the library.
 
-    Analyzes the specified file or project directory, imports context files, 
+    Analyzes the specified file or project directory, imports context files,
     lint configs, and style guides into the context library. Use project_id
     and project_name to organize knowledge by project and prevent cross-project
     contamination.
@@ -305,11 +305,11 @@ def ingest(
     if resolution_strategy and resolution_strategy.lower() != "interactive":
         try:
             from context_mixer.commands.interactions.conflict_resolution_strategies import ConflictResolutionStrategyFactory
-            
+
             # Create the strategy
             strategy = ConflictResolutionStrategyFactory.create_strategy(resolution_strategy)
             console.print(f"[blue]Using {strategy.get_strategy_name()} conflict resolution strategy[/blue]")
-            
+
         except Exception as e:
             console.print(f"[yellow]Warning: Could not create {resolution_strategy} strategy: {e}[/yellow]")
             console.print("[yellow]Falling back to interactive resolution[/yellow]")
@@ -320,7 +320,7 @@ def ingest(
 
     # Create event-driven progress tracking for CLI
     # This will automatically subscribe to progress events and display progress bars
-    event_driven_progress_tracker = create_cli_progress_tracker(console)
+    create_cli_progress_tracker(console)
 
     # Create command context with all necessary dependencies and parameters
     context = CommandContext(

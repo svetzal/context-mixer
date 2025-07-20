@@ -597,7 +597,7 @@ class VectorKnowledgeStore(KnowledgeStore):
             "cluster_chunks": list(cluster_chunks)
         }
 
-    def _fast_conflict_check(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
+    def _is_potential_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
         """
         Check if two chunks are potentially conflicting based on metadata.
 
@@ -631,6 +631,21 @@ class VectorKnowledgeStore(KnowledgeStore):
             return True
 
         return False
+
+    def _fast_conflict_check(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
+        """
+        Check if two chunks are potentially conflicting based on metadata.
+
+        This is an alias for _is_potential_conflict for backward compatibility.
+
+        Args:
+            chunk1: First chunk to compare
+            chunk2: Second chunk to compare
+
+        Returns:
+            True if chunks are potentially conflicting
+        """
+        return self._is_potential_conflict(chunk1, chunk2)
 
     async def _llm_detect_conflict(self, chunk1: KnowledgeChunk, chunk2: KnowledgeChunk) -> bool:
         """
