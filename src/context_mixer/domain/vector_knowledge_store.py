@@ -31,22 +31,40 @@ class VectorKnowledgeStore(KnowledgeStore):
     by the KnowledgeStore abstract class.
     """
 
-    def __init__(self, db_path: Path, llm_gateway=None):
+    def __init__(
+        self, 
+        db_path: Path, 
+        llm_gateway=None,
+        pool_size: int = 5,
+        max_pool_size: int = 10,
+        connection_timeout: float = 30.0
+    ):
         """
         Initialize the vector knowledge store.
 
         Args:
             db_path: Path to the ChromaDB database directory
             llm_gateway: Optional LLM gateway for conflict detection
+            pool_size: Initial number of connections in the connection pool
+            max_pool_size: Maximum number of connections in the connection pool
+            connection_timeout: Timeout in seconds for getting a connection from the pool
         """
         self.db_path = db_path
         self._gateway: Optional[ChromaGateway] = None
         self._llm_gateway = llm_gateway
+        self.pool_size = pool_size
+        self.max_pool_size = max_pool_size
+        self.connection_timeout = connection_timeout
 
     def _get_gateway(self) -> ChromaGateway:
         """Get or create the ChromaDB gateway instance."""
         if self._gateway is None:
-            self._gateway = ChromaGateway(self.db_path)
+            self._gateway = ChromaGateway(
+                db_dir=self.db_path,
+                pool_size=self.pool_size,
+                max_pool_size=self.max_pool_size,
+                connection_timeout=self.connection_timeout
+            )
         return self._gateway
 
     async def store_chunks(self, chunks: List[KnowledgeChunk]) -> None:
@@ -471,13 +489,19 @@ class VectorKnowledgeStore(KnowledgeStore):
                 None, gateway.get_collection_stats
             )
 
+            # Get connection pool statistics
+            pool_stats = await asyncio.get_event_loop().run_in_executor(
+                None, gateway.get_pool_stats
+            )
+
             # Enhance with additional statistics
             stats = {
                 "total_chunks": chroma_stats["total_chunks"],
                 "collection_name": chroma_stats["collection_name"],
                 "storage_type": "vector",
                 "backend": "chromadb",
-                "db_path": str(self.db_path)
+                "db_path": str(self.db_path),
+                "connection_pool": pool_stats
             }
 
             # Add domain and authority distribution if we have chunks
@@ -520,3 +544,22 @@ class VectorKnowledgeStore(KnowledgeStore):
             )
         except Exception as e:
             raise StorageError(f"Failed to reset knowledge store: {str(e)}", e)
+
+    async def close(self) -> None:
+        """
+        Close the knowledge store and clean up resources.
+
+        This should be called when the store is no longer needed to properly
+        close the connection pool and free resources.
+        """
+        if self._gateway:
+            # Run the synchronous gateway close method in a thread pool
+            await asyncio.get_event_loop().run_in_executor(
+                None, self._gateway.close
+            )
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()

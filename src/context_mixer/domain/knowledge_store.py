@@ -247,19 +247,34 @@ class KnowledgeStoreFactory:
     """
 
     @staticmethod
-    def create_vector_store(db_path: Path, llm_gateway=None) -> "VectorKnowledgeStore":
+    def create_vector_store(
+        db_path: Path, 
+        llm_gateway=None,
+        pool_size: int = 5,
+        max_pool_size: int = 10,
+        connection_timeout: float = 30.0
+    ) -> "VectorKnowledgeStore":
         """
-        Create a vector-based knowledge store using ChromaDB.
+        Create a vector-based knowledge store using ChromaDB with connection pooling.
 
         Args:
             db_path: Path to the database directory
             llm_gateway: Optional LLM gateway for conflict detection
+            pool_size: Initial number of connections in the connection pool
+            max_pool_size: Maximum number of connections in the connection pool
+            connection_timeout: Timeout in seconds for getting a connection from the pool
 
         Returns:
-            VectorKnowledgeStore instance
+            VectorKnowledgeStore instance with connection pooling enabled
         """
         from .vector_knowledge_store import VectorKnowledgeStore
-        return VectorKnowledgeStore(db_path, llm_gateway)
+        return VectorKnowledgeStore(
+            db_path=db_path, 
+            llm_gateway=llm_gateway,
+            pool_size=pool_size,
+            max_pool_size=max_pool_size,
+            connection_timeout=connection_timeout
+        )
 
     @staticmethod
     def create_file_store(storage_path: Path) -> "FileKnowledgeStore":
