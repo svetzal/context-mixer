@@ -252,6 +252,8 @@ into, incorporate the analysis for it into BACKLOG.md.
 
 When realizing we should consider a specific concern or feature in the future, incorporate it into PLAN.md.
 
+When changes are complete, and all unit tests are passing, check our benchmark/run_benchmarks.py script to ensure that our user-facing scenarios are still working as expected.
+
 ## Release Process
 
 This project follows Semantic Versioning (SemVer): MAJOR.MINOR.PATCH.
