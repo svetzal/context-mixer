@@ -11,6 +11,7 @@ from context_mixer.commands.operations.commit import CommitOperation
 from context_mixer.commands.operations.merge import merge_content
 from context_mixer.config import Config, DEFAULT_ROOT_CONTEXT_FILENAME
 from context_mixer.domain.chunking_engine import ChunkingEngine
+from context_mixer.domain.clustering_integration import ClusterOptimizedConflictDetector, ClusteringConfig
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.domain.events import ChunksIngestedEvent, ConflictDetectedEvent, \
     ConflictResolvedEvent, EventBus
@@ -465,68 +466,57 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 all_conflicts = []
                 chunks_to_store = []
 
-                # First, check for conflicts between chunks within the same ingestion batch
-                console.print("[blue]Checking for conflicts between new chunks...[/blue]")
+                # Create clustering configuration from config or use defaults
+                clustering_config = ClusteringConfig(
+                    enabled=config.clustering_enabled,
+                    min_cluster_size=config.min_cluster_size,
+                    batch_size=config.conflict_detection_batch_size,
+                    fallback_to_traditional=config.clustering_fallback
+                )
+                
+                # Create cluster-optimized conflict detector
+                cluster_detector = ClusterOptimizedConflictDetector(config=clustering_config)
+
+                # First, check for conflicts between chunks within the same ingestion batch using clustering
+                console.print("[blue]Checking for conflicts between new chunks using HDBSCAN clustering...[/blue]")
                 with time_operation("conflict_detection_internal", timing_collector) as internal_conflict_timing:
-                    # Create pairs of chunks to check for conflicts
-                    chunk_pairs = []
-                    for i, chunk1 in enumerate(valid_chunks):
-                        for j, chunk2 in enumerate(valid_chunks[i+1:], i+1):
-                            chunk_pairs.append((chunk1, chunk2))
+                    try:
+                        progress_tracker.start_operation("internal_conflicts", "Checking internal conflicts with clustering", len(valid_chunks))
+                        
+                        def progress_callback(completed_count, message):
+                            progress_tracker.update_progress("internal_conflicts", completed_count, message)
 
-                    if chunk_pairs:
-                        progress_tracker.start_operation("internal_conflicts", "Checking internal conflicts", len(chunk_pairs))
-                        # Use batch conflict detection for improved performance
-                        from context_mixer.commands.operations.merge import detect_conflicts_batch
+                        # Use cluster-optimized conflict detection
+                        conflict_lists = await cluster_detector.detect_internal_conflicts_optimized(
+                            valid_chunks, llm_gateway, progress_callback
+                        )
 
-                        # Get batch size from config or use default of 5
-                        batch_size = getattr(config, 'conflict_detection_batch_size', 5)
-                        console.print(f"[dim]Processing {len(chunk_pairs)} chunk pairs in batches of {batch_size}[/dim]")
+                        # Process results
+                        for conflict_list in conflict_lists:
+                            for conflict in conflict_list.list:
+                                # Update the conflict to indicate it's between new chunks
+                                updated_conflict = Conflict(
+                                    description=f"Conflicting guidance detected between new chunks: {conflict.description}",
+                                    conflicting_guidance=conflict.conflicting_guidance
+                                )
+                                all_conflicts.append(updated_conflict)
 
-                        try:
-                            # Create progress callback to update progress as batches complete
-                            def progress_callback(completed_count):
-                                progress_tracker.update_progress("internal_conflicts", completed_count, f"Checked pair {completed_count}/{len(chunk_pairs)}")
+                        # Get performance stats
+                        perf_stats = cluster_detector.get_performance_stats()
+                        if perf_stats.get("reduction_percentage"):
+                            console.print(f"[green]🚀 Clustering optimization reduced conflict checks by {perf_stats['reduction_percentage']:.1f}%[/green]")
+                        
+                        console.print(f"[dim]📊 Created {perf_stats.get('clusters_created', 0)} clusters, "
+                                    f"checked {perf_stats.get('optimized_checks', 0)} conflict candidates[/dim]")
 
-                            batch_results = await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size, progress_callback)
+                        progress_tracker.complete_operation("internal_conflicts")
 
-                            # Process results and handle conflicts
-                            for chunk1, chunk2, conflicts in batch_results:
-                                if conflicts.list:
-                                    console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
-                                    for conflict in conflicts.list:
-                                        # Update the conflict to indicate it's between new chunks
-                                        updated_conflict = Conflict(
-                                            description=f"Conflicting guidance detected between new chunks: {conflict.description}",
-                                            conflicting_guidance=[
-                                                ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
-                                                ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
-                                            ]
-                                        )
-                                        all_conflicts.append(updated_conflict)
-                        except Exception as e:
-                            console.print(f"[yellow]Warning: Batch conflict detection failed, falling back to sequential processing: {str(e)}[/yellow]")
-                            # Fallback to sequential processing if batch processing fails
-                            for i, (chunk1, chunk2) in enumerate(chunk_pairs):
-                                progress_tracker.update_progress("internal_conflicts", i + 1, f"Checked pair {i + 1}/{len(chunk_pairs)}")
-                                try:
-                                    from context_mixer.commands.operations.merge import detect_conflicts
-                                    conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
-                                    if conflicts.list:
-                                        console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
-                                        for conflict in conflicts.list:
-                                            updated_conflict = Conflict(
-                                                description=f"Conflicting guidance detected between new chunks: {conflict.description}",
-                                                conflicting_guidance=[
-                                                    ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
-                                                    ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
-                                                ]
-                                            )
-                                            all_conflicts.append(updated_conflict)
-                                except Exception as inner_e:
-                                    console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(inner_e)}[/yellow]")
-
-                    if chunk_pairs:
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Cluster-optimized conflict detection failed: {str(e)}[/yellow]")
+                        console.print("[yellow]Falling back to traditional conflict detection...[/yellow]")
+                        
+                        # Traditional fallback is already handled inside the cluster detector
+                        # but if there's a complete failure, we can add additional fallback here
                         progress_tracker.complete_operation("internal_conflicts")
 
                 console.print(f"[dim]🔍 Internal conflict detection completed in {format_duration(internal_conflict_timing.duration_seconds)}[/dim]")
