@@ -72,7 +72,7 @@ flake8 src --count --exit-zero --max-complexity=10 --max-line-length=127 --stati
 pip install -e ".[dev]"
 
 # Install pre-commit hook
-cp precommit-hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+cp commit-hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
 ### Documentation
