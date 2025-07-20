@@ -1,11 +1,12 @@
 import asyncio
 import logging
 from textwrap import dedent
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 from mojentic.llm import LLMMessage
 
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
+from context_mixer.commands.interactions.conflict_resolution_strategies import ConflictResolutionStrategy
 from context_mixer.domain.conflict import ConflictList, Conflict, ConflictingGuidance
 from context_mixer.domain.llm_instructions import ingest_system_message, clean_prompt
 from context_mixer.domain.knowledge import KnowledgeChunk
@@ -312,7 +313,7 @@ def build_merge_prompt(existing_content: str, new_content: str, resolved_conflic
 
 
 def merge_content(existing_content: str, new_content: str, llm_gateway: LLMGateway,
-                  console=None, resolver: ConflictResolver = None) -> str:
+                  console=None, resolver: Union[ConflictResolver, ConflictResolutionStrategy] = None) -> str:
     """
     Merge existing content with new content using an LLM to create a coherent document.
 

@@ -1,6 +1,7 @@
 import asyncio
 import os
 from pathlib import Path
+from typing import Union
 
 from rich.panel import Panel
 from rich.table import Table
@@ -15,6 +16,7 @@ from context_mixer.domain.chunking_engine import ChunkingEngine
 from context_mixer.domain.knowledge_store import KnowledgeStore, KnowledgeStoreFactory
 from context_mixer.domain.conflict import Conflict, ConflictingGuidance
 from context_mixer.commands.interactions.resolve_conflicts import resolve_conflicts, ConflictResolver
+from context_mixer.commands.interactions.conflict_resolution_strategies import ConflictResolutionStrategy
 from context_mixer.domain.knowledge import KnowledgeChunk
 from context_mixer.utils.timing import TimingCollector, time_operation, format_duration
 from context_mixer.utils.progress import ProgressTracker, NoOpProgressObserver
@@ -284,7 +286,7 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
     return chunks_to_add
 
 
-async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None, event_bus: EventBus=None):
+async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: Union[ConflictResolver, ConflictResolutionStrategy]=None, knowledge_store: KnowledgeStore=None, event_bus: EventBus=None):
     """
     Ingest existing prompt artifacts into the library using intelligent chunking.
 
