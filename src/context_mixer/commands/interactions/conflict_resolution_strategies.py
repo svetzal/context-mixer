@@ -5,6 +5,9 @@ This module implements the Strategy pattern for conflict resolution,
 providing multiple approaches to resolve conflicts between guidance.
 """
 
+import os
+import subprocess
+import tempfile
 from abc import ABC, abstractmethod
 from typing import List, Optional, Protocol
 from rich.console import Console
@@ -100,7 +103,7 @@ class UserInteractiveResolutionStrategy(ConflictResolutionStrategy):
                     break
                 elif choice_idx == len(conflict.conflicting_guidance):
                     # User wants to enter their own resolution
-                    resolution = self._get_multiline_input(console)
+                    resolution = self._get_multiline_input(console, conflict)
                     break
                 elif choice_idx == len(conflict.conflicting_guidance) + 1:
                     # User indicates this is not a conflict
@@ -118,9 +121,97 @@ class UserInteractiveResolutionStrategy(ConflictResolutionStrategy):
             resolution=resolution
         )
 
-    def _get_multiline_input(self, console: Console) -> str:
+    def _get_multiline_input(self, console: Console, conflict: Conflict) -> str:
         """
-        Get multi-line input from the user, terminated by a single '.' on a line by itself.
+        Get multi-line input from the user.
+
+        If the EDITOR environment variable is set, creates a temporary file,
+        launches the editor, and reads the result. Otherwise, falls back to
+        terminal input terminated by a single '.' on a line by itself.
+
+        Args:
+            console: Console for user interaction
+            conflict: The conflict being resolved (used to populate editor with both chunks)
+
+        Returns:
+            The multi-line input as a single string with newlines preserved
+        """
+        editor = os.environ.get('EDITOR')
+
+        if editor:
+            return self._get_input_via_editor(console, editor, conflict)
+        else:
+            return self._get_input_via_terminal(console)
+
+    def _get_input_via_editor(self, console: Console, editor: str, conflict: Conflict) -> str:
+        """
+        Get input via external editor.
+
+        Args:
+            console: Console for user interaction
+            editor: Editor command to use
+            conflict: The conflict being resolved (used to populate editor with both chunks)
+
+        Returns:
+            The content from the editor
+        """
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            # Write initial content to help the user
+            temp_file.write("# Enter your conflict resolution below.\n")
+            temp_file.write("# You can edit, delete, or combine the conflicting guidance shown below.\n")
+            temp_file.write("# Lines starting with # will be ignored.\n")
+            temp_file.write(f"# Conflict: {conflict.description}\n\n")
+
+            # Write both conflicting guidance chunks
+            for i, guidance in enumerate(conflict.conflicting_guidance):
+                temp_file.write(f"# === Option {i + 1}: From {guidance.source} ===\n")
+                temp_file.write(f"{guidance.content}\n\n")
+
+            temp_file.write("# === End of conflicting guidance ===\n")
+            temp_file.write("# Edit the content above to create your resolution.\n\n")
+
+        try:
+            console.print(f"\n[bold]Opening editor ({editor}) for conflict resolution...[/bold]")
+
+            # Launch the editor
+            result = subprocess.run([editor, temp_file_path], check=True)
+
+            # Read the content back
+            with open(temp_file_path, 'r') as temp_file:
+                content = temp_file.read()
+
+            # Filter out comment lines and clean up
+            lines = []
+            for line in content.split('\n'):
+                if not line.strip().startswith('#'):
+                    lines.append(line)
+
+            # Remove leading/trailing empty lines
+            while lines and not lines[0].strip():
+                lines.pop(0)
+            while lines and not lines[-1].strip():
+                lines.pop()
+
+            return '\n'.join(lines)
+
+        except subprocess.CalledProcessError:
+            console.print("[red]Editor was cancelled or failed. Falling back to terminal input.[/red]")
+            return self._get_input_via_terminal(console)
+        except FileNotFoundError:
+            console.print(f"[red]Editor '{editor}' not found. Falling back to terminal input.[/red]")
+            return self._get_input_via_terminal(console)
+        finally:
+            # Clean up the temporary file
+            try:
+                os.unlink(temp_file_path)
+            except OSError:
+                pass  # File might already be deleted
+
+    def _get_input_via_terminal(self, console: Console) -> str:
+        """
+        Get input via terminal (original behavior).
 
         Args:
             console: Console for user interaction

@@ -147,6 +147,13 @@ def format_conflict_resolutions(resolved_conflicts) -> str:
     for conflict in resolved_conflicts:
         if conflict.resolution:
             conflict_resolutions.append(f"Description: {conflict.description}\nResolution: {conflict.resolution}")
+        elif conflict.resolution is None:
+            # Handle "This is not a conflict" case - both pieces of guidance should be preserved
+            guidance_list = []
+            for guidance in conflict.conflicting_guidance:
+                guidance_list.append(f"- {guidance.content} (from {guidance.source})")
+
+            conflict_resolutions.append(f"Description: {conflict.description}\nResolution: This is not a conflict - both pieces of guidance are acceptable:\n" + "\n".join(guidance_list))
 
     if not conflict_resolutions:
         return ""

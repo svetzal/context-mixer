@@ -44,11 +44,11 @@ class DescribeFormatConflictResolutions:
         result = format_conflict_resolutions([])
         assert result == ""
 
-    def should_return_empty_string_when_conflicts_have_no_resolutions(self):
-        """Test that function returns empty string when conflicts have no resolutions."""
-        conflicts_without_resolution = [
+    def should_handle_conflicts_with_resolution_none(self):
+        """Test that conflicts with resolution=None are handled as 'not a conflict'."""
+        conflicts_with_resolution_none = [
             Conflict(
-                description="Unresolved conflict",
+                description="Not actually a conflict",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use 4 spaces", source="existing"),
                     ConflictingGuidance(content="Use 2 spaces", source="new")
@@ -57,8 +57,12 @@ class DescribeFormatConflictResolutions:
             )
         ]
 
-        result = format_conflict_resolutions(conflicts_without_resolution)
-        assert result == ""
+        result = format_conflict_resolutions(conflicts_with_resolution_none)
+        assert result != ""
+        assert "Not actually a conflict" in result
+        assert "This is not a conflict - both pieces of guidance are acceptable" in result
+        assert "Use 4 spaces (from existing)" in result
+        assert "Use 2 spaces (from new)" in result
 
     def should_format_single_conflict_with_resolution(self, sample_conflicts):
         """Test formatting of a single conflict with resolution."""
@@ -82,8 +86,8 @@ class DescribeFormatConflictResolutions:
         assert "Resolution: Use camelCase for variables in JavaScript, snake_case in Python" in result
         assert "When merging the documents, use these resolutions to guide your work." in result
 
-    def should_skip_conflicts_without_resolutions_in_mixed_list(self):
-        """Test that conflicts without resolutions are skipped in mixed lists."""
+    def should_handle_mixed_conflicts_with_and_without_resolutions(self):
+        """Test that both resolved conflicts and conflicts with resolution=None are handled."""
         mixed_conflicts = [
             Conflict(
                 description="Resolved conflict",
@@ -94,12 +98,12 @@ class DescribeFormatConflictResolutions:
                 resolution="Use spaces for indentation"
             ),
             Conflict(
-                description="Unresolved conflict",
+                description="Not a conflict",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use semicolons", source="existing"),
                     ConflictingGuidance(content="No semicolons", source="new")
                 ],
-                resolution=None  # No resolution
+                resolution=None  # This is not a conflict
             )
         ]
 
@@ -109,9 +113,11 @@ class DescribeFormatConflictResolutions:
         assert "Description: Resolved conflict" in result
         assert "Resolution: Use spaces for indentation" in result
 
-        # Should not include the unresolved conflict
-        assert "Unresolved conflict" not in result
-        assert "Use semicolons" not in result
+        # Should also include the "not a conflict" resolution
+        assert "Not a conflict" in result
+        assert "This is not a conflict - both pieces of guidance are acceptable" in result
+        assert "Use semicolons (from existing)" in result
+        assert "No semicolons (from new)" in result
 
     def should_handle_empty_resolution_strings(self):
         """Test that conflicts with empty resolution strings are skipped."""
