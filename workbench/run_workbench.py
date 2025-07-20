@@ -31,6 +31,8 @@ sys.path.insert(0, str(project_root))
 from context_mixer.config import Config
 from context_mixer.gateways.llm import LLMGateway, OpenAIModels
 from context_mixer.commands.ingest import do_ingest
+from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
+from context_mixer.domain.clustering import ClusteringConfig
 from workbench.automated_resolver import AutomatedConflictResolver
 from workbench.scenarios.indentation_conflict import get_scenario as get_indentation_scenario
 from workbench.scenarios.false_positive_naming import get_scenario as get_false_positive_scenario
@@ -100,6 +102,21 @@ class WorkbenchRunner:
             # Setup config
             config = Config(library_path=library_path)
 
+            # Create workbench-friendly clustering config (smaller min_cluster_size for test scenarios)
+            clustering_config = ClusteringConfig(
+                min_cluster_size=2,  # Allow clustering with just 2 chunks for testing
+                min_samples=1        # Make clustering more sensitive for small datasets
+            )
+            
+            # Create knowledge store with workbench clustering configuration
+            vector_store_path = library_path / "vector_store"
+            knowledge_store = KnowledgeStoreFactory.create_vector_store(
+                db_path=vector_store_path,
+                llm_gateway=self.llm_gateway,
+                clustering_config=clustering_config,
+                enable_clustering=True
+            )
+
             # Track results
             results = {
                 "scenario_name": scenario_name,
@@ -127,7 +144,8 @@ class WorkbenchRunner:
                         project_name="Workbench Test",
                         commit=False,
                         detect_boundaries=True,
-                        resolver=self.automated_resolver
+                        resolver=self.automated_resolver,
+                        knowledge_store=knowledge_store  # Use our workbench knowledge store
                     )
 
                 # Check if context.md was created and validate content
