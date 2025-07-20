@@ -3,7 +3,7 @@
 # Pre-commit Hook Installation Instructions:
 # 1. Make this script executable: chmod +x commit-hook.sh
 # 2. Copy this script to your git hooks directory: cp commit-hook.sh .git/hooks/pre-commit
-# 3. Alternatively, create a symlink: ln -sf ../../commit-hook.sh .git/hooks/pre-commit
+# 3. Alternatively, create a symlink: ln -sf commit-hook.sh .git/hooks/pre-commit
 #
 # This hook runs the same validation checks as our CI pipeline:
 # - flake8 linting for syntax errors and code style
@@ -26,17 +26,17 @@ if [[ -z "$VIRTUAL_ENV" ]]; then
     fi
 fi
 
-echo "Running flake8 syntax and error checks..."
-# Stop the validation if there are Python syntax errors or undefined names
-flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
+echo "Running flake8..."
+ # stop the validation if there are Python syntax errors or undefined names
+ flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
+ if [ $? -ne 0 ]; then
+     echo "flake8 found critical errors. Commit aborted."
+     exit 1
+ fi
+ # exit-zero treats all errors as warnings
+ flake8 src --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --ignore=F401
 
-echo "Running flake8 style checks..."
-# Exit-zero treats all errors as warnings for style checks
-flake8 src --count --exit-zero --max-complexity=10 --max-line-length=127 \
-  --statistics --ignore=F401
-
-echo "Running pytest..."
-# Run tests (without coverage reports for faster execution)
-pytest
-
-echo "All pre-commit checks passed! ✓"
+ echo "Running pytest..."
+ python -m pytest
+ exit_code=$?
+ exit $exit_code
