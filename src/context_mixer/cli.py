@@ -17,7 +17,6 @@ APP_NAME = "Context Mixer"
 logging.basicConfig(level=logging.WARN)
 
 import typer
-from mojentic.llm.gateways import OpenAIGateway
 from rich.console import Console
 from rich.panel import Panel
 
@@ -38,7 +37,7 @@ from context_mixer.commands.base import CommandContext
 from context_mixer.config import Config
 from context_mixer.cli_params import CLIParameterHandler
 from context_mixer.gateways.git import GitGateway
-from context_mixer.gateways.llm import LLMGateway
+from context_mixer.gateways.llm_factory import create_default_llm_gateway
 from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 
 # Create Typer app
@@ -52,10 +51,45 @@ console = Console()
 
 git_gateway = GitGateway()
 
-# Initialize the OpenAI gateway and LLM gateway
-openai_gateway = OpenAIGateway(api_key=os.environ.get("OPENAI_API_KEY"))
-# llm_gateway = LLMGateway(model="gpt-4.1", gateway=openai_gateway)
-llm_gateway = LLMGateway(model="o4-mini", gateway=openai_gateway)
+# Global LLM gateway - will be created on demand
+llm_gateway = None
+llm_gateway_error = None
+
+
+def get_llm_gateway():
+    """
+    Get the LLM gateway, ensuring it's properly configured.
+    
+    Returns:
+        LLMGateway: The configured LLM gateway.
+        
+    Raises:
+        typer.Exit: If the gateway is not configured properly.
+    """
+    global llm_gateway, llm_gateway_error
+    
+    if llm_gateway is None:
+        try:
+            llm_gateway = create_default_llm_gateway()
+        except ValueError as e:
+            llm_gateway_error = str(e)
+        except Exception as e:
+            llm_gateway_error = f"Network error during gateway initialization: {str(e)[:100]}..."
+        
+        if llm_gateway is None:
+            if llm_gateway_error:
+                console.print(f"[red]Error: {llm_gateway_error}[/red]")
+            else:
+                console.print("[red]Error: LLM gateway not configured properly.[/red]")
+            
+            console.print("\nTo configure the LLM gateway, run:")
+            console.print("  [cyan]cmx config --provider openai --model o4-mini --api-key YOUR_API_KEY[/cyan]")
+            console.print("  [cyan]cmx config --provider ollama --model phi3[/cyan]")
+            console.print("\nTo see current configuration:")
+            console.print("  [cyan]cmx config --show[/cyan]")
+            raise typer.Exit(1)
+    
+    return llm_gateway
 
 @app.command()
 def init(
@@ -160,7 +194,8 @@ def assemble(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance)
 
     # Create and execute the assemble command
     assemble_command = AssembleCommand()
@@ -169,7 +204,7 @@ def assemble(
     context = CommandContext(
         console=console,
         config=config,
-        llm_gateway=llm_gateway,
+        llm_gateway=llm_gateway_instance,
         knowledge_store=knowledge_store,
         parameters={
             'target': target,
@@ -250,7 +285,7 @@ def slice(
     context = CommandContext(
         console=console,
         config=config,
-        llm_gateway=llm_gateway,
+        llm_gateway=get_llm_gateway(),
         parameters={
             'output_path': output,
             'granularity': granularity,
@@ -319,7 +354,8 @@ def ingest(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway, config=config)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance, config=config)
 
     # Create and execute the ingest command with injected dependencies
     ingest_command = IngestCommand(knowledge_store)
@@ -332,7 +368,7 @@ def ingest(
     context = CommandContext(
         console=console,
         config=config,
-        llm_gateway=llm_gateway,
+        llm_gateway=llm_gateway_instance,
         knowledge_store=knowledge_store,
         parameters={
             'path': path,
@@ -430,7 +466,8 @@ def quarantine_list(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance)
 
     # Create and execute the quarantine list command
     quarantine_list_command = QuarantineListCommand()
@@ -470,7 +507,8 @@ def quarantine_review(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance)
 
     # Create and execute the quarantine review command
     quarantine_review_command = QuarantineReviewCommand()
@@ -522,7 +560,8 @@ def quarantine_resolve(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance)
 
     # Create and execute the quarantine resolve command
     quarantine_resolve_command = QuarantineResolveCommand()
@@ -562,7 +601,8 @@ def quarantine_stats(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance)
 
     # Create and execute the quarantine stats command
     quarantine_stats_command = QuarantineStatsCommand()
@@ -595,7 +635,8 @@ def quarantine_clear(
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    llm_gateway_instance = get_llm_gateway()
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway_instance)
 
     # Create and execute the quarantine clear command
     quarantine_clear_command = QuarantineClearCommand()
@@ -608,6 +649,86 @@ def quarantine_clear(
     )
 
     asyncio.run(quarantine_clear_command.execute(context))
+
+
+@app.command(name="config")
+def configure(
+    provider: Optional[str] = typer.Option(
+        None,
+        help="LLM provider to use (openai, ollama)"
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        help="Model name to use with the provider"
+    ),
+    api_key: Optional[str] = typer.Option(
+        None,
+        help="API key for providers that require it (e.g., OpenAI)"
+    ),
+    show: bool = typer.Option(
+        False,
+        "--show",
+        help="Show current configuration"
+    ),
+):
+    """
+    Configure LLM gateway settings.
+    """
+    config = Config.load()
+    
+    if show:
+        console.print("\n[bold]Current Configuration:[/bold]")
+        console.print(f"  Library Path: {config.library_path}")
+        console.print(f"  LLM Provider: {config.llm_provider}")
+        console.print(f"  LLM Model: {config.llm_model}")
+        console.print(f"  API Key: {'***' if config.llm_api_key else 'Not set'}")
+        console.print(f"  Clustering Enabled: {config.clustering_enabled}")
+        console.print(f"  Batch Size: {config.conflict_detection_batch_size}")
+        return
+    
+    # Update configuration if any parameters are provided
+    updated = False
+    
+    if provider is not None:
+        if provider.lower() not in ["openai", "ollama"]:
+            console.print(f"[red]Error: Unsupported provider '{provider}'. Use 'openai' or 'ollama'.[/red]")
+            raise typer.Exit(1)
+        config._llm_provider = provider.lower()
+        updated = True
+        console.print(f"✓ Set provider to: {provider.lower()}")
+    
+    if model is not None:
+        config._llm_model = model
+        updated = True
+        console.print(f"✓ Set model to: {model}")
+    
+    if api_key is not None:
+        config._llm_api_key = api_key
+        updated = True
+        console.print("✓ Set API key")
+    
+    if updated:
+        try:
+            config.save()
+            console.print(f"✓ Configuration saved to: {config.config_path}")
+            
+            # Try to validate the configuration by creating a gateway
+            from context_mixer.gateways.llm_factory import create_llm_gateway
+            try:
+                create_llm_gateway(config)
+                console.print("✓ Configuration validated successfully")
+            except ValueError as e:
+                console.print(f"[yellow]Warning: {e}[/yellow]")
+            except Exception as e:
+                # Handle network errors during validation gracefully
+                console.print(f"[yellow]Warning: Could not validate configuration due to network error: {str(e)[:100]}...[/yellow]")
+                console.print("[yellow]Configuration saved, but validation skipped due to network limitations.[/yellow]")
+                
+        except Exception as e:
+            console.print(f"[red]Error saving configuration: {e}[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print("No configuration changes specified. Use --help to see available options.")
 
 
 if __name__ == "__main__":
