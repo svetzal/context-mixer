@@ -5,7 +5,7 @@ This module tests the HDBSCAN clustering domain models and their functionality.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from context_mixer.domain.clustering import (
@@ -34,7 +34,7 @@ class DescribeClusterMetadata:
             domains=["technical", "testing"],
             authority_levels={AuthorityLevel.OFFICIAL, AuthorityLevel.CONVENTIONAL},
             scopes=["backend", "api"],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             chunk_count=5
         )
 
@@ -51,7 +51,7 @@ class DescribeClusterMetadata:
             domains=["business"],
             authority_levels=set(),
             scopes=[],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         assert len(metadata.authority_levels) == 0
 
@@ -66,7 +66,7 @@ class DescribeKnowledgeCluster:
             domains=["technical"],
             authority_levels={AuthorityLevel.OFFICIAL},
             scopes=["backend"],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             chunk_count=3
         )
 
@@ -97,7 +97,7 @@ class DescribeKnowledgeCluster:
             domains=["technical"],
             authority_levels={AuthorityLevel.OFFICIAL},
             scopes=[],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             chunk_count=0
         )
 
@@ -117,7 +117,7 @@ class DescribeKnowledgeCluster:
             domains=["technical"],
             authority_levels={AuthorityLevel.OFFICIAL},
             scopes=[],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         semantic_cluster = KnowledgeCluster(id="semantic", metadata=semantic_metadata, chunk_ids=["chunk-1"])
         assert semantic_cluster.get_conflict_detection_threshold() == 0.7
@@ -128,7 +128,7 @@ class DescribeKnowledgeCluster:
             domains=["technical"],
             authority_levels={AuthorityLevel.OFFICIAL},
             scopes=[],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         subdomain_cluster = KnowledgeCluster(id="subdomain", metadata=subdomain_metadata, chunk_ids=["chunk-1"])
         assert subdomain_cluster.get_conflict_detection_threshold() == 0.8
@@ -139,7 +139,7 @@ class DescribeKnowledgeCluster:
             domains=["technical"],
             authority_levels={AuthorityLevel.OFFICIAL},
             scopes=[],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         domain_cluster = KnowledgeCluster(id="domain", metadata=domain_metadata, chunk_ids=["chunk-1"])
         assert domain_cluster.get_conflict_detection_threshold() == 0.9
@@ -155,7 +155,7 @@ class DescribeClusteringResult:
             domains=["technical"],
             authority_levels={AuthorityLevel.OFFICIAL},
             scopes=[],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             chunk_count=2
         )
 
@@ -164,7 +164,7 @@ class DescribeClusteringResult:
             domains=["business"],
             authority_levels={AuthorityLevel.FOUNDATIONAL},
             scopes=[],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             chunk_count=0
         )
 
