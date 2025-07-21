@@ -17,6 +17,8 @@ from .knowledge import (
     TemporalScope
 )
 from .knowledge_store import KnowledgeStore, StorageError
+from .clustering_service import ClusteringService
+from .cluster_aware_conflict_detection import ClusterAwareConflictDetector
 from ..gateways.chroma import ChromaGateway
 
 
@@ -35,7 +37,8 @@ class VectorKnowledgeStore(KnowledgeStore):
         llm_gateway=None,
         pool_size: int = 5,
         max_pool_size: int = 10,
-        connection_timeout: float = 30.0
+        connection_timeout: float = 30.0,
+        enable_clustering: bool = True
     ):
         """
         Initialize the vector knowledge store.
@@ -46,6 +49,7 @@ class VectorKnowledgeStore(KnowledgeStore):
             pool_size: Initial number of connections in the connection pool
             max_pool_size: Maximum number of connections in the connection pool
             connection_timeout: Timeout in seconds for getting a connection from the pool
+            enable_clustering: Whether to enable HDBSCAN clustering for optimized conflict detection
         """
         self.db_path = db_path
         self._gateway: Optional[ChromaGateway] = None
@@ -53,6 +57,24 @@ class VectorKnowledgeStore(KnowledgeStore):
         self.pool_size = pool_size
         self.max_pool_size = max_pool_size
         self.connection_timeout = connection_timeout
+        self.enable_clustering = enable_clustering
+
+        # Initialize clustering components if enabled and dependencies are available
+        self._clustering_service: Optional[ClusteringService] = None
+        self._cluster_aware_detector: Optional[ClusterAwareConflictDetector] = None
+
+        if enable_clustering and llm_gateway:
+            try:
+                self._clustering_service = ClusteringService(llm_gateway)
+                self._cluster_aware_detector = ClusterAwareConflictDetector(
+                    self._clustering_service, llm_gateway
+                )
+            except ImportError as e:
+                # HDBSCAN not available, fall back to traditional conflict detection
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"HDBSCAN clustering not available, falling back to traditional conflict detection: {e}")
+                self.enable_clustering = False
 
     def _get_gateway(self) -> ChromaGateway:
         """Get or create the ChromaDB gateway instance."""
@@ -252,11 +274,11 @@ class VectorKnowledgeStore(KnowledgeStore):
 
     async def detect_conflicts(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
         """
-        Detect potential conflicts with existing knowledge using comprehensive analysis.
+        Detect potential conflicts with existing knowledge using optimized analysis.
 
-        This implementation checks all chunks in the same domains, not just semantically
-        similar ones, to ensure we catch conflicts that might use different wording
-        but address the same topics.
+        This implementation uses HDBSCAN clustering when available to reduce expensive
+        pairwise LLM comparisons from O(n²) to O(k*log(k)) where k << n².
+        Falls back to traditional domain-based detection when clustering is disabled.
 
         Args:
             chunk: KnowledgeChunk to check for conflicts
@@ -268,37 +290,87 @@ class VectorKnowledgeStore(KnowledgeStore):
             StorageError: If conflict detection fails
         """
         try:
-            conflicts = []
-
-            # Get all chunks in the same domains as the input chunk
-            # This ensures we check for conflicts across all related content,
-            # not just semantically similar content
-            for domain in chunk.metadata.domains:
-                domain_query = SearchQuery(
-                    text="*",  # Match all content
-                    domains=[domain],
-                    max_results=100  # Get more results to be comprehensive
-                )
-                domain_results = await self.search(domain_query)
-
-                for result in domain_results.results:
-                    candidate = result.chunk
-
-                    # Skip the chunk itself
-                    if candidate.id == chunk.id:
-                        continue
-
-                    # Skip if we've already checked this candidate
-                    if candidate in conflicts:
-                        continue
-
-                    # Use LLM-based conflict detection for accurate analysis
-                    if await self._llm_detect_conflict(chunk, candidate):
-                        conflicts.append(candidate)
-
-            return conflicts
+            # Use cluster-aware conflict detection if available
+            if self.enable_clustering and self._cluster_aware_detector:
+                return await self._detect_conflicts_optimized(chunk)
+            else:
+                return await self._detect_conflicts_traditional(chunk)
         except Exception as e:
             raise StorageError(f"Failed to detect conflicts: {str(e)}", e)
+
+    async def _detect_conflicts_optimized(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
+        """
+        Optimized conflict detection using HDBSCAN clustering.
+
+        This method implements the performance optimization from PLAN.md by using
+        clustering to reduce the number of expensive LLM-based comparisons.
+        """
+        # Get all existing chunks in the same domains
+        existing_chunks = []
+        for domain in chunk.metadata.domains:
+            domain_query = SearchQuery(
+                text="*",  # Match all content
+                domains=[domain],
+                max_results=1000  # Get comprehensive results for clustering
+            )
+            domain_results = await self.search(domain_query)
+
+            for result in domain_results.results:
+                candidate = result.chunk
+                # Skip the chunk itself
+                if candidate.id != chunk.id and candidate not in existing_chunks:
+                    existing_chunks.append(candidate)
+
+        if not existing_chunks:
+            return []
+
+        # Use cluster-aware conflict detection
+        conflicts = await self._cluster_aware_detector.detect_conflicts_optimized(
+            chunk, existing_chunks, use_cache=True, max_candidates=50
+        )
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Cluster-aware conflict detection: {len(conflicts)} conflicts found "
+                   f"from {len(existing_chunks)} candidates")
+
+        return conflicts
+
+    async def _detect_conflicts_traditional(self, chunk: KnowledgeChunk) -> List[KnowledgeChunk]:
+        """
+        Traditional conflict detection method (fallback when clustering is disabled).
+
+        This is the original O(n²) implementation that checks all chunks in the same domains.
+        """
+        conflicts = []
+
+        # Get all chunks in the same domains as the input chunk
+        # This ensures we check for conflicts across all related content,
+        # not just semantically similar content
+        for domain in chunk.metadata.domains:
+            domain_query = SearchQuery(
+                text="*",  # Match all content
+                domains=[domain],
+                max_results=100  # Get more results to be comprehensive
+            )
+            domain_results = await self.search(domain_query)
+
+            for result in domain_results.results:
+                candidate = result.chunk
+
+                # Skip the chunk itself
+                if candidate.id == chunk.id:
+                    continue
+
+                # Skip if we've already checked this candidate
+                if candidate in conflicts:
+                    continue
+
+                # Use LLM-based conflict detection for accurate analysis
+                if await self._llm_detect_conflict(chunk, candidate):
+                    conflicts.append(candidate)
+
+        return conflicts
 
     async def find_similar_chunks(self, chunk: KnowledgeChunk, similarity_threshold: float = 0.7) -> List[KnowledgeChunk]:
         """
