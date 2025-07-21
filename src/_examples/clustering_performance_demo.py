@@ -8,20 +8,19 @@ LLM calls from O(n²) to O(k*log(k)) where k << n².
 import asyncio
 import logging
 import time
-from pathlib import Path
 from typing import List
-import uuid
+
+from context_mixer.domain.conflict import ConflictList
 
 # Set logging to WARN before importing mojentic
 logging.basicConfig(level=logging.WARN)
 
 from context_mixer.domain.knowledge import (
-    KnowledgeChunk, ChunkMetadata, AuthorityLevel, GranularityLevel, 
+    KnowledgeChunk, ChunkMetadata, AuthorityLevel, GranularityLevel,
     TemporalScope, ProvenanceInfo
 )
 from context_mixer.domain.clustering_service import ClusteringService
 from context_mixer.domain.cluster_aware_conflict_detection import ClusterAwareConflictDetector
-from context_mixer.gateways.llm import LLMGateway
 
 
 def create_sample_chunks(count: int = 50) -> List[KnowledgeChunk]:
@@ -32,7 +31,7 @@ def create_sample_chunks(count: int = 50) -> List[KnowledgeChunk]:
     domains_content = [
         ("technical", "architecture", [
             "Use microservices architecture for scalability",
-            "Implement API versioning for backward compatibility", 
+            "Implement API versioning for backward compatibility",
             "Follow REST principles for API design",
             "Use database migrations for schema changes",
             "Implement proper error handling in services"
@@ -220,7 +219,6 @@ async def demo_with_mock_llm():
 
         def generate_object(self, messages, object_model):
             # Import here to avoid circular imports
-            from context_mixer.domain.conflict import ConflictList
 
             # Mock response for conflict detection - return empty conflict list
             if object_model == ConflictList:
