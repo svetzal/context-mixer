@@ -23,6 +23,9 @@ dependencies = [
     "fastmcp",
     "chromadb",
     "chroma-hnswlib",
+    "hdbscan>=0.8.33",
+    "scikit-learn>=1.3.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
