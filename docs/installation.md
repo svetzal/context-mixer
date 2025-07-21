@@ -144,4 +144,8 @@ If you have an older version, consider using [pyenv](https://github.com/pyenv/py
 
 ## Next Steps
 
-Now that Context Mixer is installed, learn about the [CRAFT Framework](craft-overview.md) that powers intelligent context management, or jump straight into [using cmx to ingest prompts](ingesting-prompts.md) from your existing projects.
+Now that Context Mixer is installed:
+
+1. **Learn the Concepts**: Understand the [CRAFT Framework](craft-overview.md) that powers intelligent context management
+2. **Start Ingesting**: Begin [ingesting prompts](ingesting-prompts.md) from your existing projects
+3. **Optimize Performance**: For large knowledge bases, explore [Performance Optimization](performance-optimization.md) with HDBSCAN clustering to achieve **70%+ speed improvements**

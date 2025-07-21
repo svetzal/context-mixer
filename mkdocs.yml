@@ -38,6 +38,7 @@ plugins:
           - craft-overview.md
         Using cmx:
           - ingesting-prompts.md
+          - performance-optimization.md
           - slicing-context.md
           - assembling-copilot-instructions.md
           - exploring-library.md
@@ -62,6 +63,7 @@ nav:
   - CRAFT Framework: craft-overview.md
   - Using cmx:
       - Ingesting Prompts: ingesting-prompts.md
+      - Performance Optimization: performance-optimization.md
       - Slicing Context: slicing-context.md
       - Assembling Copilot Instructions: assembling-copilot-instructions.md
       - Exploring Your Library: exploring-library.md

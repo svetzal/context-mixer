@@ -278,6 +278,22 @@ def ingest(
             None,
             help="Human-readable project name"
         ),
+        clustering: bool = typer.Option(
+            True,
+            help="Enable HDBSCAN clustering for optimized conflict detection"
+        ),
+        min_cluster_size: int = typer.Option(
+            3,
+            help="Minimum number of chunks required to form a cluster"
+        ),
+        clustering_fallback: bool = typer.Option(
+            True,
+            help="Fall back to traditional O(n²) conflict detection if clustering fails"
+        ),
+        batch_size: int = typer.Option(
+            5,
+            help="Number of conflict detections to process concurrently"
+        ),
 ):
     """
     Ingest existing context artifacts into the library.
@@ -286,13 +302,23 @@ def ingest(
     lint configs, and style guides into the context library. Use project_id
     and project_name to organize knowledge by project and prevent cross-project
     contamination.
+    
+    HDBSCAN clustering is enabled by default to optimize conflict detection
+    from O(n²) to O(k*log(k)) by grouping semantically similar chunks and 
+    only checking conflicts within/between related clusters.
     """
-    # Create a new config with the specified library path if provided
-    config = Config(library_path)
+    # Create a new config with the specified library path and clustering settings
+    config = Config(
+        library_path=library_path,
+        conflict_detection_batch_size=batch_size,
+        clustering_enabled=clustering,
+        min_cluster_size=min_cluster_size,
+        clustering_fallback=clustering_fallback
+    )
 
     # Create knowledge store with dependency injection
     vector_store_path = config.library_path / "vector_store"
-    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway)
+    knowledge_store = KnowledgeStoreFactory.create_vector_store(vector_store_path, llm_gateway, config=config)
 
     # Create and execute the ingest command with injected dependencies
     ingest_command = IngestCommand(knowledge_store)

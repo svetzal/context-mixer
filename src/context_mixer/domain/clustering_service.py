@@ -13,17 +13,13 @@ from typing import List, Dict, Optional, Tuple
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-try:
-    from hdbscan import HDBSCAN
-except ImportError:
-    HDBSCAN = None
-
 from .clustering import (
     KnowledgeCluster, ClusteringResult, ClusterType, ClusterMetadata,
     ConflictDetectionCandidate
 )
 from .knowledge import KnowledgeChunk
 from ..gateways.llm import LLMGateway
+from ..gateways.hdbscan_gateway import HDBSCANGateway, ClusteringParameters, create_hdbscan_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +32,18 @@ class ClusteringService:
     from O(n²) to O(k*log(k)) where k << n².
     """
 
-    def __init__(self, llm_gateway: Optional[LLMGateway] = None):
+    def __init__(self, 
+                 llm_gateway: Optional[LLMGateway] = None,
+                 hdbscan_gateway: Optional[HDBSCANGateway] = None):
         """
         Initialize the clustering service.
 
         Args:
             llm_gateway: Optional LLM gateway for generating cluster summaries
+            hdbscan_gateway: Optional HDBSCAN gateway for clustering operations
         """
-        if HDBSCAN is None:
-            raise ImportError("hdbscan package is required. Install with: pip install hdbscan")
-
         self.llm_gateway = llm_gateway
+        self.hdbscan_gateway = hdbscan_gateway or create_hdbscan_gateway()
         self.scaler = StandardScaler()
 
         # Default HDBSCAN parameters optimized for knowledge clustering
@@ -89,17 +86,28 @@ class ClusteringService:
             logger.warning("No embeddings available for clustering")
             return self._create_fallback_clusters(chunks)
 
-        # Apply HDBSCAN clustering
+        # Apply HDBSCAN clustering through gateway
         params = {**self.default_params, **(clustering_params or {})}
-        clusterer = HDBSCAN(**params)
+        clustering_parameters = ClusteringParameters(
+            min_cluster_size=params.get('min_cluster_size', 3),
+            min_samples=params.get('min_samples', 1),
+            alpha=params.get('alpha', 1.0),
+            cluster_selection_epsilon=params.get('cluster_selection_epsilon', 0.0),
+            max_cluster_size=params.get('max_cluster_size', 0),
+            metric=params.get('metric', 'euclidean'),
+            cluster_selection_method=params.get('cluster_selection_method', 'eom')
+        )
 
         # Normalize embeddings for better clustering
         embeddings_scaled = self.scaler.fit_transform(embeddings)
-        cluster_labels = clusterer.fit_predict(embeddings_scaled)
+        
+        # Perform clustering through gateway
+        clustering_result = await self.hdbscan_gateway.cluster(embeddings_scaled, clustering_parameters)
+        cluster_labels = clustering_result.labels
 
         # Create hierarchical clusters
         clusters = await self._create_hierarchical_clusters(
-            chunks, cluster_labels, clusterer, chunk_id_map
+            chunks, cluster_labels, clustering_result, chunk_id_map
         )
 
         # Identify noise (unclustered chunks)
@@ -108,7 +116,7 @@ class ClusteringService:
         ]
 
         # Calculate performance metrics
-        metrics = self._calculate_clustering_metrics(cluster_labels, clusterer)
+        metrics = self._calculate_clustering_metrics(cluster_labels, clustering_result)
 
         result = ClusteringResult(
             clusters=clusters,
@@ -179,7 +187,7 @@ class ClusteringService:
             self,
             chunks: List[KnowledgeChunk],
             cluster_labels: np.ndarray,
-            clusterer: HDBSCAN,
+            clustering_result: any,  # HDBSCANGateway.ClusteringResult
             chunk_id_map: Dict[int, str]
     ) -> List[KnowledgeCluster]:
         """Create hierarchical clusters from HDBSCAN results."""
@@ -200,7 +208,7 @@ class ClusteringService:
         # Create clusters with hierarchical organization
         for label, chunk_list in cluster_chunks.items():
             cluster = await self._create_cluster_from_chunks(
-                label, chunk_list, clusterer
+                label, chunk_list, clustering_result
             )
             clusters.append(cluster)
 
@@ -211,7 +219,7 @@ class ClusteringService:
             self,
             hdbscan_label: int,
             chunks: List[KnowledgeChunk],
-            clusterer: HDBSCAN
+            clustering_result: any  # HDBSCANGateway.ClusteringResult
     ) -> KnowledgeCluster:
         """Create a KnowledgeCluster from a group of chunks."""
         cluster_id = str(uuid.uuid4())
@@ -240,8 +248,8 @@ class ClusteringService:
 
         # Get stability score from HDBSCAN
         stability_score = None
-        if hasattr(clusterer, 'cluster_persistence_'):
-            stability_scores = clusterer.cluster_persistence_
+        if clustering_result.cluster_persistence is not None:
+            stability_scores = clustering_result.cluster_persistence
             if hdbscan_label < len(stability_scores):
                 stability_score = float(stability_scores[hdbscan_label])
 
@@ -462,7 +470,7 @@ Summary:"""
     def _calculate_clustering_metrics(
             self,
             cluster_labels: np.ndarray,
-            clusterer: HDBSCAN
+            clustering_result: any  # HDBSCANGateway.ClusteringResult
     ) -> Dict[str, float]:
         """Calculate clustering performance metrics."""
         metrics = {}
@@ -476,7 +484,7 @@ Summary:"""
         metrics['noise_ratio'] = metrics['num_noise_points'] / len(cluster_labels)
 
         # HDBSCAN-specific metrics
-        if hasattr(clusterer, 'cluster_persistence_'):
-            metrics['avg_cluster_stability'] = float(np.mean(clusterer.cluster_persistence_))
+        if clustering_result.cluster_persistence is not None:
+            metrics['avg_cluster_stability'] = float(np.mean(clustering_result.cluster_persistence))
 
         return metrics

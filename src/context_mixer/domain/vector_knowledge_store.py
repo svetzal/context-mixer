@@ -41,7 +41,8 @@ class VectorKnowledgeStore(KnowledgeStore):
         pool_size: int = 5,
         max_pool_size: int = 10,
         connection_timeout: float = 30.0,
-        enable_clustering: bool = True
+        enable_clustering: bool = True,
+        config=None
     ):
         """
         Initialize the vector knowledge store.
@@ -53,6 +54,7 @@ class VectorKnowledgeStore(KnowledgeStore):
             max_pool_size: Maximum number of connections in the connection pool
             connection_timeout: Timeout in seconds for getting a connection from the pool
             enable_clustering: Whether to enable HDBSCAN clustering for optimized conflict detection
+            config: Optional Config instance for clustering settings
         """
         self.db_path = db_path
         self._gateway: Optional[ChromaGateway] = None

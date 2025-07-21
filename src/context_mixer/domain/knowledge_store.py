@@ -250,7 +250,8 @@ class KnowledgeStoreFactory:
         llm_gateway=None,
         pool_size: int = 5,
         max_pool_size: int = 10,
-        connection_timeout: float = 30.0
+        connection_timeout: float = 30.0,
+        config=None
     ) -> "VectorKnowledgeStore":
         """
         Create a vector-based knowledge store using ChromaDB with connection pooling.
@@ -261,17 +262,26 @@ class KnowledgeStoreFactory:
             pool_size: Initial number of connections in the connection pool
             max_pool_size: Maximum number of connections in the connection pool
             connection_timeout: Timeout in seconds for getting a connection from the pool
+            config: Optional Config instance for clustering settings
 
         Returns:
             VectorKnowledgeStore instance with connection pooling enabled
         """
         from .vector_knowledge_store import VectorKnowledgeStore
+        
+        # Use clustering settings from config if provided
+        enable_clustering = True
+        if config:
+            enable_clustering = config.clustering_enabled
+        
         return VectorKnowledgeStore(
             db_path=db_path, 
             llm_gateway=llm_gateway,
             pool_size=pool_size,
             max_pool_size=max_pool_size,
-            connection_timeout=connection_timeout
+            connection_timeout=connection_timeout,
+            enable_clustering=enable_clustering,
+            config=config
         )
 
     @staticmethod
