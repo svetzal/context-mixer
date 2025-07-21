@@ -9,11 +9,16 @@ and ensures we can always pass them all.
 
 import argparse
 import asyncio
+import importlib
+import importlib.util
+import inspect
 import logging
 import os
+import pkgutil
 import sys
 import tempfile
 import time
+import yaml
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -32,13 +37,42 @@ from context_mixer.config import Config
 from context_mixer.gateways.llm import LLMGateway, OpenAIModels
 from context_mixer.commands.ingest import do_ingest
 from workbench.automated_resolver import AutomatedConflictResolver
-from workbench.scenarios.indentation_conflict import get_scenario as get_indentation_scenario
-from workbench.scenarios.false_positive_naming import get_scenario as get_false_positive_scenario
-from workbench.scenarios.internal_conflict import get_scenario as get_internal_scenario
-from workbench.scenarios.architectural_scope_false_positive import get_scenario as get_architectural_scope_scenario
-
-# Import OpenAI gateway
 from mojentic.llm.gateways import OpenAIGateway
+
+
+def discover_scenarios() -> Dict[str, Any]:
+    """Dynamically discover all scenario modules."""
+    scenarios = {}
+    
+    # Find the scenarios package directory
+    scenarios_dir = Path(__file__).parent / "scenarios"
+    if not scenarios_dir.exists():
+        return scenarios
+    
+    # Import each scenario module and look for get_scenario function
+    for file_path in scenarios_dir.glob("*.py"):
+        if file_path.name.startswith("__"):
+            continue
+            
+        module_name = file_path.stem
+        try:
+            # Import the module dynamically
+            spec = importlib.util.spec_from_file_location(f"scenarios.{module_name}", file_path)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                
+                # Look for get_scenario function
+                if hasattr(module, 'get_scenario'):
+                    get_scenario_func = getattr(module, 'get_scenario')
+                    if callable(get_scenario_func):
+                        scenarios[module_name] = get_scenario_func
+                        
+        except Exception:
+            # Silently skip modules that can't be loaded
+            continue
+    
+    return scenarios
 
 
 class WorkbenchRunner:
@@ -48,7 +82,14 @@ class WorkbenchRunner:
         """Initialize the workbench runner."""
         self.console = Console()
         self.automated_resolver = AutomatedConflictResolver(self.console)
-        self.model = OpenAIModels.O4_MINI
+        
+        # Configure model selection via environment variable
+        model_name = os.environ.get("WORKBENCH_MODEL", "O4_MINI").upper()
+        try:
+            self.model = OpenAIModels[model_name]
+        except KeyError:
+            self.console.print(f"[red]Error: Unknown model '{model_name}'. Available models: {', '.join(OpenAIModels.__members__.keys())}[/red]")
+            sys.exit(1)
 
         # Configure OpenAI gateway
         api_key = os.environ.get("OPENAI_API_KEY")
@@ -59,13 +100,10 @@ class WorkbenchRunner:
         openai_gateway = OpenAIGateway(api_key=api_key)
         self.llm_gateway = LLMGateway(model=self.model.value, gateway=openai_gateway)
 
-        # Available scenarios
-        self.scenarios = {
-            "indentation_conflict": get_indentation_scenario,
-            "false_positive_naming": get_false_positive_scenario,
-            "internal_conflict": get_internal_scenario,
-            "architectural_scope_false_positive": get_architectural_scope_scenario,
-        }
+        # Auto-discover scenarios
+        self.scenarios = discover_scenarios()
+        if not self.scenarios:
+            self.console.print("[red]Error: No scenarios found in scenarios directory[/red]")
 
     async def run_scenario(self, scenario_name: str) -> Dict[str, Any]:
         """
@@ -287,17 +325,8 @@ Total Time: {total_time:.2f} seconds
         self.console.print(Panel(summary_text.strip(), title="Final Results", style=panel_style))
 
 
-async def main():
-    """Main entry point for the workbench."""
-    parser = argparse.ArgumentParser(description="Run conflict detection workbench scenarios")
-    parser.add_argument(
-        "--scenario", 
-        help="Run a specific scenario (default: run all scenarios)",
-        choices=["indentation_conflict", "false_positive_naming", "internal_conflict", "architectural_scope_false_positive"]
-    )
-
-    args = parser.parse_args()
-
+async def run_command(args):
+    """Run scenarios command."""
     runner = WorkbenchRunner()
 
     if args.scenario:
@@ -318,6 +347,190 @@ async def main():
             sys.exit(1)
         else:
             sys.exit(0)
+
+
+def list_scenarios_command(args):
+    """List all available scenarios."""
+    console = Console()
+    runner = WorkbenchRunner()
+    
+    console.print("[bold green]Available Scenarios[/bold green]")
+    
+    table = Table()
+    table.add_column("Name", style="cyan")
+    table.add_column("Description", style="dim")
+    
+    for scenario_name in runner.scenarios.keys():
+        scenario = runner.scenarios[scenario_name]()
+        table.add_row(scenario_name, scenario.description)
+    
+    console.print(table)
+
+
+def validate_scenario_command(args):
+    """Validate a specific scenario definition."""
+    console = Console()
+    runner = WorkbenchRunner()
+    
+    if args.scenario_name not in runner.scenarios:
+        console.print(f"[red]Error: Scenario '{args.scenario_name}' not found[/red]")
+        sys.exit(1)
+    
+    try:
+        scenario = runner.scenarios[args.scenario_name]()
+        console.print(f"[green]✅ Scenario '{args.scenario_name}' is valid[/green]")
+        console.print(f"Description: {scenario.description}")
+        console.print(f"Input files: {len(scenario.input_files)}")
+        console.print(f"Expected conflicts: {len(scenario.expected_conflicts)}")
+        console.print(f"Validation checks: {len(scenario.validation_checks)}")
+    except Exception as e:
+        console.print(f"[red]❌ Scenario '{args.scenario_name}' validation failed: {e}[/red]")
+        sys.exit(1)
+
+
+def load_yaml_scenario(yaml_path: Path):
+    """Load a scenario from YAML file and create a Python scenario file."""
+    try:
+        with yaml_path.open('r') as f:
+            yaml_data = yaml.safe_load(f)
+        
+        # Import the common classes
+        from workbench.scenarios.common import ConflictExpectation, ScenarioDefinition
+        
+        # Convert YAML data to ConflictExpectation objects
+        conflict_expectations = []
+        for conflict_data in yaml_data.get('expected_conflicts', []):
+            conflict_expectations.append(ConflictExpectation(**conflict_data))
+        
+        # Create ScenarioDefinition
+        scenario = ScenarioDefinition(
+            name=yaml_data['name'],
+            description=yaml_data['description'],
+            input_files=yaml_data['input_files'],
+            expected_conflicts=conflict_expectations,
+            expected_resolution=yaml_data.get('expected_resolution', ''),
+            validation_checks=yaml_data.get('validation_checks', [])
+        )
+        
+        return scenario
+        
+    except Exception as e:
+        raise ValueError(f"Failed to load YAML scenario: {e}")
+
+
+def generate_python_scenario_file(scenario, output_path: Path):
+    """Generate a Python scenario file from a ScenarioDefinition."""
+    
+    # Generate the Python code
+    python_code = f'''"""
+{scenario.description}
+"""
+
+from .common import ConflictExpectation, ScenarioDefinition
+
+
+def get_scenario() -> ScenarioDefinition:
+    """Get the {scenario.name} scenario definition."""
+    
+    return ScenarioDefinition(
+        name="{scenario.name}",
+        description="{scenario.description}",
+        input_files={repr(scenario.input_files)},
+        expected_conflicts=[
+{chr(10).join(f"            ConflictExpectation(**{repr(conflict.model_dump())})," for conflict in scenario.expected_conflicts)}
+        ],
+        expected_resolution="{scenario.expected_resolution}",
+        validation_checks={repr(scenario.validation_checks)}
+    )
+'''
+    
+    with output_path.open('w') as f:
+        f.write(python_code)
+
+
+def add_scenario_command(args):
+    """Add a new scenario from YAML/JSON."""
+    console = Console()
+    
+    if not args.from_yaml:
+        console.print("[yellow]⚠️  Please provide a YAML file with --from-yaml[/yellow]")
+        console.print("Example usage: python workbench_cli.py add-scenario --from-yaml scenario.yaml")
+        return
+    
+    yaml_path = Path(args.from_yaml)
+    if not yaml_path.exists():
+        console.print(f"[red]Error: YAML file not found: {yaml_path}[/red]")
+        return
+    
+    try:
+        # Load the YAML scenario
+        scenario = load_yaml_scenario(yaml_path)
+        
+        # Generate Python scenario file
+        scenarios_dir = Path(__file__).parent / "scenarios"
+        output_path = scenarios_dir / f"{scenario.name}.py"
+        
+        if output_path.exists():
+            console.print(f"[red]Error: Scenario file already exists: {output_path}[/red]")
+            return
+        
+        generate_python_scenario_file(scenario, output_path)
+        
+        console.print(f"[green]✅ Successfully created scenario: {scenario.name}[/green]")
+        console.print(f"File created: {output_path}")
+        console.print("You can now run it with:")
+        console.print(f"python workbench_cli.py run --scenario {scenario.name}")
+        
+    except Exception as e:
+        console.print(f"[red]Error creating scenario: {e}[/red]")
+
+
+async def main():
+    """Main entry point for the workbench CLI."""
+    parser = argparse.ArgumentParser(description="Context Mixer Conflict Detection Workbench")
+    
+    # Create subparsers for different commands
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Get available scenarios dynamically
+    available_scenarios = list(discover_scenarios().keys())
+    
+    # Run command
+    run_parser = subparsers.add_parser('run', help='Run scenarios')
+    run_parser.add_argument(
+        '--scenario',
+        help='Run a specific scenario (default: run all scenarios)',
+        choices=available_scenarios
+    )
+    run_parser.set_defaults(func=run_command)
+    
+    # List scenarios command
+    list_parser = subparsers.add_parser('list-scenarios', help='List all available scenarios')
+    list_parser.set_defaults(func=list_scenarios_command)
+    
+    # Validate scenario command
+    validate_parser = subparsers.add_parser('validate-scenario', help='Validate a specific scenario')
+    validate_parser.add_argument('scenario_name', help='Name of the scenario to validate')
+    validate_parser.set_defaults(func=validate_scenario_command)
+    
+    # Add scenario command (placeholder)
+    add_parser = subparsers.add_parser('add-scenario', help='Add a new scenario from YAML/JSON')
+    add_parser.add_argument('--from-yaml', help='Path to YAML scenario definition')
+    add_parser.set_defaults(func=add_scenario_command)
+    
+    args = parser.parse_args()
+    
+    # If no command specified, default to run
+    if not args.command:
+        args.command = 'run'
+        args.scenario = None
+        args.func = run_command
+    
+    # Handle async commands
+    if args.command == 'run':
+        await args.func(args)
+    else:
+        args.func(args)
 
 
 if __name__ == "__main__":

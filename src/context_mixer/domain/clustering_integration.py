@@ -127,7 +127,7 @@ class ClusterOptimizedConflictDetector:
             
             # Step 3: Select conflict candidates based on clustering
             candidates = self._select_conflict_candidates(
-                target_chunk, target_cluster, clustering_result, max_candidates
+                target_chunk, target_cluster, clustering_result, existing_chunks, max_candidates
             )
             
             # Step 4: Perform conflict detection on candidates only
@@ -194,7 +194,7 @@ class ClusterOptimizedConflictDetector:
                           clustering_result: ClusteringResult) -> Optional[KnowledgeCluster]:
         """Find which cluster contains the given chunk."""
         for cluster in clustering_result.clusters:
-            if chunk.id in [c.id for c in cluster.chunks]:
+            if chunk.id in cluster.chunk_ids:
                 return cluster
         return None
     
@@ -202,6 +202,7 @@ class ClusterOptimizedConflictDetector:
                                   target_chunk: KnowledgeChunk,
                                   target_cluster: Optional[KnowledgeCluster],
                                   clustering_result: ClusteringResult,
+                                  existing_chunks: List[KnowledgeChunk],
                                   max_candidates: int) -> List[KnowledgeChunk]:
         """
         Select conflict candidates based on clustering relationships.
@@ -215,9 +216,12 @@ class ClusterOptimizedConflictDetector:
         
         if target_cluster:
             # Add all chunks from the same cluster
-            for chunk in target_cluster.chunks:
-                if chunk.id != target_chunk.id:
-                    candidates.append(chunk)
+            for chunk_id in target_cluster.chunk_ids:
+                if chunk_id != target_chunk.id:
+                    # Find the actual chunk object from existing_chunks
+                    chunk = next((c for c in existing_chunks if c.id == chunk_id), None)
+                    if chunk:
+                        candidates.append(chunk)
         
         # Add representatives from other clusters, prioritizing by authority and relevance
         for cluster in clustering_result.clusters:
@@ -225,8 +229,12 @@ class ClusterOptimizedConflictDetector:
                 continue  # Skip target cluster, already added
             
             # Add high-authority chunks from other clusters
+            cluster_chunk_objects = [
+                c for c in existing_chunks 
+                if c.id in cluster.chunk_ids
+            ]
             cluster_candidates = sorted(
-                cluster.chunks,
+                cluster_chunk_objects,
                 key=lambda c: c.get_authority_level().value,
                 reverse=True
             )
@@ -260,7 +268,7 @@ class ClusterOptimizedConflictDetector:
             # Extract the conflicting chunks from the results
             conflicts = []
             for target, candidate, conflict_list in conflict_results:
-                if conflict_list and len(conflict_list.conflicts) > 0:
+                if conflict_list and len(conflict_list.list) > 0:
                     conflicts.append(candidate)
             return conflicts
             
@@ -296,7 +304,7 @@ class ClusterOptimizedConflictDetector:
             # Extract the conflicting chunks from the results
             conflicts = []
             for target, candidate, conflict_list in conflict_results:
-                if conflict_list and len(conflict_list.conflicts) > 0:
+                if conflict_list and len(conflict_list.list) > 0:
                     conflicts.append(candidate)
             return conflicts
             

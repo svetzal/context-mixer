@@ -4,7 +4,6 @@ Tests for the init command and InitCommand class.
 Tests both the legacy do_init function and the new InitCommand class
 that implements the Command pattern boundary.
 """
-from typing import AnyStr
 
 import pytest
 
@@ -37,7 +36,7 @@ class DescribeDoInit:
 
     def should_clone_repository_when_remote_is_provided(self, mock_git_gateway, mock_console, mock_path, mock_config):
         remote = "git@github.com:user/repo.git"
-        mock_git_gateway.clone.return_value = (True, AnyStr)
+        mock_git_gateway.clone.return_value = (True, "Success")
 
         do_init(mock_console, mock_config, remote, None, None, mock_git_gateway)
 
@@ -45,7 +44,7 @@ class DescribeDoInit:
         assert mock_console.print.call_count >= 3  # At least 3 print calls
 
     def should_initialize_new_repository_when_remote_not_provided(self, mock_git_gateway, mock_console, mock_path, mock_config):
-        mock_git_gateway.init.return_value = (True, AnyStr)
+        mock_git_gateway.init.return_value = (True, "Success")
 
         do_init(mock_console, mock_config, None, None, None, mock_git_gateway)
 
@@ -53,7 +52,7 @@ class DescribeDoInit:
         assert mock_console.print.call_count >= 3  # At least 3 print calls
 
     def should_create_directory_if_it_doesnt_exist(self, mock_git_gateway, mock_console, mock_path, mock_config):
-        mock_git_gateway.init.return_value = (True, AnyStr)
+        mock_git_gateway.init.return_value = (True, "Success")
 
         do_init(mock_console, mock_config, None, None, None, mock_git_gateway)
 
@@ -63,7 +62,7 @@ class DescribeDoInit:
     def should_handle_provider_and_model_parameters(self, mock_git_gateway, mock_console, mock_path, mock_config):
         provider = "ollama"
         model = "phi3"
-        mock_git_gateway.init.return_value = (True, AnyStr)
+        mock_git_gateway.init.return_value = (True, "Success")
 
         do_init(mock_console, mock_config, None, provider, model, mock_git_gateway)
 

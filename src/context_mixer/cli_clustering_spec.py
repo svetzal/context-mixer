@@ -6,7 +6,7 @@ proper configuration and parameter validation.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from pathlib import Path
 from typer.testing import CliRunner
 
@@ -22,9 +22,9 @@ class DescribeClusteringCLIParameters:
         self.runner = CliRunner()
         self.temp_path = Path("/tmp/test-context-mixer")
 
-    @patch('src.context_mixer.cli.KnowledgeStoreFactory')
-    @patch('src.context_mixer.cli.IngestCommand')
-    @patch('src.context_mixer.cli.llm_gateway', MagicMock())
+    @patch('context_mixer.cli.KnowledgeStoreFactory')
+    @patch('context_mixer.cli.IngestCommand')
+    @patch('context_mixer.cli.llm_gateway', MagicMock())
     def should_use_default_clustering_parameters(self, mock_ingest_command, mock_factory):
         """Test that default clustering parameters are used when not specified."""
         mock_store = MagicMock()
@@ -35,7 +35,7 @@ class DescribeClusteringCLIParameters:
         # Mock the execute method to return a successful result
         mock_result = MagicMock()
         mock_result.success = True
-        mock_command_instance.execute.return_value = mock_result
+        mock_command_instance.execute = AsyncMock(return_value=mock_result)
         
         result = self.runner.invoke(app, [
             'ingest',
@@ -57,9 +57,9 @@ class DescribeClusteringCLIParameters:
         assert config.clustering_fallback is True
         assert config.conflict_detection_batch_size == 5
 
-    @patch('src.context_mixer.cli.KnowledgeStoreFactory')
-    @patch('src.context_mixer.cli.IngestCommand')
-    @patch('src.context_mixer.cli.llm_gateway', MagicMock())
+    @patch('context_mixer.cli.KnowledgeStoreFactory')
+    @patch('context_mixer.cli.IngestCommand')
+    @patch('context_mixer.cli.llm_gateway', MagicMock())
     def should_use_custom_clustering_parameters(self, mock_ingest_command, mock_factory):
         """Test that custom clustering parameters are properly passed."""
         mock_store = MagicMock()
@@ -70,7 +70,7 @@ class DescribeClusteringCLIParameters:
         # Mock the execute method to return a successful result
         mock_result = MagicMock()
         mock_result.success = True
-        mock_command_instance.execute.return_value = mock_result
+        mock_command_instance.execute = AsyncMock(return_value=mock_result)
         
         result = self.runner.invoke(app, [
             'ingest',
@@ -96,9 +96,9 @@ class DescribeClusteringCLIParameters:
         assert config.clustering_fallback is False
         assert config.conflict_detection_batch_size == 10
 
-    @patch('src.context_mixer.cli.KnowledgeStoreFactory')
-    @patch('src.context_mixer.cli.IngestCommand')
-    @patch('src.context_mixer.cli.llm_gateway', MagicMock())
+    @patch('context_mixer.cli.KnowledgeStoreFactory')
+    @patch('context_mixer.cli.IngestCommand')
+    @patch('context_mixer.cli.llm_gateway', MagicMock())
     def should_handle_clustering_enabled_explicitly(self, mock_ingest_command, mock_factory):
         """Test explicitly enabling clustering."""
         mock_store = MagicMock()
@@ -109,7 +109,7 @@ class DescribeClusteringCLIParameters:
         # Mock the execute method to return a successful result
         mock_result = MagicMock()
         mock_result.success = True
-        mock_command_instance.execute.return_value = mock_result
+        mock_command_instance.execute = AsyncMock(return_value=mock_result)
         
         result = self.runner.invoke(app, [
             'ingest',

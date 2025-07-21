@@ -3,6 +3,7 @@ Tests for the ingest command.
 """
 
 import pytest
+from unittest.mock import AsyncMock
 from rich.panel import Panel
 
 from context_mixer.commands.base import CommandContext, CommandResult
@@ -76,10 +77,10 @@ def mock_commit_operation(mocker, mock_git_gateway):
 def mock_knowledge_store(mocker):
     """Mock knowledge store for dependency injection testing."""
     mock = mocker.MagicMock(spec=KnowledgeStore)
-    # Set up common return values
-    mock.detect_conflicts.return_value = []  # No conflicts by default
-    mock.store_chunks.return_value = None  # Successful storage
-    mock.get_all_chunks.return_value = []  # Empty store by default
+    # Set up common return values with AsyncMock for async methods
+    mock.detect_conflicts = AsyncMock(return_value=[])  # No conflicts by default
+    mock.store_chunks = AsyncMock(return_value=None)  # Successful storage
+    mock.get_all_chunks = AsyncMock(return_value=[])  # Empty store by default
     return mock
 
 

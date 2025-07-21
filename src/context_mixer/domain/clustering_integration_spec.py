@@ -14,7 +14,7 @@ from context_mixer.domain.clustering_integration import (
     ClusteringConfig, ClusterOptimizedConflictDetector, ClusteringStatistics
 )
 from context_mixer.domain.clustering import KnowledgeCluster, ClusteringResult, ClusterType, ClusterMetadata
-from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, AuthorityLevel, TemporalScope
+from context_mixer.domain.knowledge import KnowledgeChunk, ChunkMetadata, AuthorityLevel, TemporalScope, ProvenanceInfo, GranularityLevel
 from context_mixer.gateways.llm import LLMGateway
 
 
@@ -55,6 +55,7 @@ class DescribeClusterOptimizedConflictDetector:
     def setup_method(self):
         """Set up test fixtures."""
         self.mock_clustering_service = MagicMock()
+        self.mock_clustering_service.cluster_knowledge_chunks = AsyncMock()
         self.mock_llm_gateway = MagicMock(spec=LLMGateway)
         self.config = ClusteringConfig(enabled=True, batch_size=2)
         
@@ -69,10 +70,15 @@ class DescribeClusterOptimizedConflictDetector:
             id="target-1",
             content="Target chunk content",
             metadata=ChunkMetadata(
-                file_path="test.py",
                 domains=["technical"],
-                authority_level=AuthorityLevel.OFFICIAL,
-                temporal_scope=TemporalScope.CURRENT
+                authority=AuthorityLevel.OFFICIAL,
+                scope=["project"],
+                granularity=GranularityLevel.DETAILED,
+                temporal=TemporalScope.CURRENT,
+                provenance=ProvenanceInfo(
+                    source="test.py",
+                    created_at="2024-01-01T00:00:00Z"
+                )
             )
         )
         
@@ -81,10 +87,15 @@ class DescribeClusterOptimizedConflictDetector:
                 id=f"chunk-{i}",
                 content=f"Existing chunk {i}",
                 metadata=ChunkMetadata(
-                    file_path=f"test{i}.py",
                     domains=["technical"],
-                    authority_level=AuthorityLevel.OFFICIAL,
-                    temporal_scope=TemporalScope.CURRENT
+                    authority=AuthorityLevel.OFFICIAL,
+                    scope=["project"],
+                    granularity=GranularityLevel.DETAILED,
+                    temporal=TemporalScope.CURRENT,
+                    provenance=ProvenanceInfo(
+                        source=f"test{i}.py",
+                        created_at="2024-01-01T00:00:00Z"
+                    )
                 )
             )
             for i in range(5)
@@ -96,12 +107,12 @@ class DescribeClusterOptimizedConflictDetector:
         # Mock clustering result
         cluster = KnowledgeCluster(
             id="cluster-1",
-            chunks=[self.target_chunk, self.existing_chunks[0], self.existing_chunks[1]],
+            chunk_ids=[self.target_chunk.id, self.existing_chunks[0].id, self.existing_chunks[1].id],
             metadata=ClusterMetadata(
                 cluster_type=ClusterType.SEMANTIC_CLUSTER,
                 domains=["technical"],
-                authority_levels=[AuthorityLevel.OFFICIAL],
-                scopes=[TemporalScope.CURRENT],
+                authority_levels={AuthorityLevel.OFFICIAL},
+                scopes=["project"],
                 created_at="2024-01-01T00:00:00",
                 chunk_count=3
             )
@@ -115,15 +126,30 @@ class DescribeClusterOptimizedConflictDetector:
         )
         
         # Mock the clustering service
-        self.mock_clustering_service.cluster_knowledge = AsyncMock(return_value=clustering_result)
+        self.mock_clustering_service.cluster_knowledge_chunks = AsyncMock(return_value=clustering_result)
         
         # Mock conflict detection to return one conflict
-        mock_detect_conflicts_batch = AsyncMock(return_value=[self.existing_chunks[0]])
+        from context_mixer.domain.conflict import ConflictList, Conflict, ConflictingGuidance
+        from context_mixer.domain.context import Context
+        
+        conflict_list = ConflictList(list=[
+            Conflict(
+                description="Test conflict",
+                conflicting_guidance=[
+                    ConflictingGuidance(content="existing", source="existing"),
+                    ConflictingGuidance(content="new", source="new")
+                ]
+            )
+        ])
+        
+        mock_detect_conflicts_batch = AsyncMock(return_value=[
+            (self.target_chunk, self.existing_chunks[0], conflict_list)
+        ])
         
         # Patch the detect_conflicts_batch function
         with pytest.MonkeyPatch().context() as m:
             m.setattr(
-                'src.context_mixer.domain.clustering_integration.detect_conflicts_batch',
+                'context_mixer.domain.clustering_integration.detect_conflicts_batch',
                 mock_detect_conflicts_batch
             )
             
@@ -146,7 +172,7 @@ class DescribeClusterOptimizedConflictDetector:
         assert stats.fallback_used is False
         
         # Verify clustering service was called
-        self.mock_clustering_service.cluster_knowledge.assert_called_once()
+        self.mock_clustering_service.cluster_knowledge_chunks.assert_called_once()
 
     @pytest.mark.asyncio
     async def should_fallback_when_clustering_disabled(self):
@@ -159,11 +185,25 @@ class DescribeClusterOptimizedConflictDetector:
         )
         
         # Mock traditional conflict detection
-        mock_detect_conflicts_batch = AsyncMock(return_value=[self.existing_chunks[0]])
+        from context_mixer.domain.conflict import ConflictList, Conflict, ConflictingGuidance
+        
+        conflict_list = ConflictList(list=[
+            Conflict(
+                description="Test conflict",
+                conflicting_guidance=[
+                    ConflictingGuidance(content="existing", source="existing"),
+                    ConflictingGuidance(content="new", source="new")
+                ]
+            )
+        ])
+        
+        mock_detect_conflicts_batch = AsyncMock(return_value=[
+            (self.target_chunk, self.existing_chunks[0], conflict_list)
+        ])
         
         with pytest.MonkeyPatch().context() as m:
             m.setattr(
-                'src.context_mixer.domain.clustering_integration.detect_conflicts_batch',
+                'context_mixer.domain.clustering_integration.detect_conflicts_batch',
                 mock_detect_conflicts_batch
             )
             
@@ -177,22 +217,28 @@ class DescribeClusterOptimizedConflictDetector:
         assert len(conflicts) == 1
         
         # Verify clustering service was not called
-        self.mock_clustering_service.cluster_knowledge.assert_not_called()
+        self.mock_clustering_service.cluster_knowledge_chunks.assert_not_called()
 
     @pytest.mark.asyncio
     async def should_fallback_when_clustering_fails(self):
         """Test fallback when clustering operation fails."""
         # Mock clustering service to raise an exception
-        self.mock_clustering_service.cluster_knowledge = AsyncMock(
+        self.mock_clustering_service.cluster_knowledge_chunks = AsyncMock(
             side_effect=Exception("Clustering failed")
         )
         
         # Mock traditional conflict detection
-        mock_detect_conflicts_batch = AsyncMock(return_value=[])
+        from context_mixer.domain.conflict import ConflictList
+        
+        empty_conflict_list = ConflictList(list=[])
+        
+        mock_detect_conflicts_batch = AsyncMock(return_value=[
+            (self.target_chunk, self.existing_chunks[0], empty_conflict_list)
+        ])
         
         with pytest.MonkeyPatch().context() as m:
             m.setattr(
-                'src.context_mixer.domain.clustering_integration.detect_conflicts_batch',
+                'context_mixer.domain.clustering_integration.detect_conflicts_batch',
                 mock_detect_conflicts_batch
             )
             
@@ -223,12 +269,12 @@ class DescribeClusterOptimizedConflictDetector:
         # First call - should cluster and cache
         cluster = KnowledgeCluster(
             id="cluster-1",
-            chunks=[self.target_chunk],
+            chunk_ids=[self.target_chunk.id],
             metadata=ClusterMetadata(
                 cluster_type=ClusterType.SEMANTIC_CLUSTER,
                 domains=["technical"],
-                authority_levels=[AuthorityLevel.OFFICIAL],
-                scopes=[TemporalScope.CURRENT],
+                authority_levels={AuthorityLevel.OFFICIAL},
+                scopes=["project"],
                 created_at="2024-01-01T00:00:00",
                 chunk_count=1
             )
@@ -241,14 +287,20 @@ class DescribeClusterOptimizedConflictDetector:
             performance_metrics={}
         )
         
-        self.mock_clustering_service.cluster_knowledge = AsyncMock(return_value=clustering_result)
+        self.mock_clustering_service.cluster_knowledge_chunks = AsyncMock(return_value=clustering_result)
         
         # Mock conflict detection
-        mock_detect_conflicts_batch = AsyncMock(return_value=[])
+        from context_mixer.domain.conflict import ConflictList
+        
+        empty_conflict_list = ConflictList(list=[])
+        
+        mock_detect_conflicts_batch = AsyncMock(return_value=[
+            (self.target_chunk, self.existing_chunks[0], empty_conflict_list)
+        ])
         
         with pytest.MonkeyPatch().context() as m:
             m.setattr(
-                'src.context_mixer.domain.clustering_integration.detect_conflicts_batch',
+                'context_mixer.domain.clustering_integration.detect_conflicts_batch',
                 mock_detect_conflicts_batch
             )
             
@@ -267,7 +319,7 @@ class DescribeClusterOptimizedConflictDetector:
             )
         
         # Clustering service should only be called once due to caching
-        assert self.mock_clustering_service.cluster_knowledge.call_count == 1
+        assert self.mock_clustering_service.cluster_knowledge_chunks.call_count == 1
 
     def should_clear_cache(self):
         """Test cache clearing functionality."""

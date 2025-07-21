@@ -8,27 +8,7 @@ This scenario tests the basic indentation conflict that we've encountered:
 This should be detected as a conflict and resolved automatically.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List
-
-
-@dataclass
-class ConflictExpectation:
-    """Expected conflict details."""
-    description_contains: str
-    conflicting_guidance_count: int
-    should_detect: bool = True
-
-
-@dataclass
-class ScenarioDefinition:
-    """Definition of a test scenario."""
-    name: str
-    description: str
-    input_files: Dict[str, str]  # filename -> content
-    expected_conflicts: List[ConflictExpectation]
-    expected_resolution: str
-    validation_checks: List[str]  # List of strings that should/shouldn't be in final output
+from .common import ConflictExpectation, ScenarioDefinition
 
 
 def get_scenario() -> ScenarioDefinition:
