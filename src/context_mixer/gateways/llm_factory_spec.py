@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from context_mixer.config import Config
-from context_mixer.gateways.llm_factory import create_llm_gateway, create_default_llm_gateway
+from context_mixer.gateways.llm_factory import LLMGatewayFactory
 
 
 class DescribeConfig:
@@ -118,7 +118,7 @@ class DescribeLLMGatewayFactory:
         mock_openai_instance = MagicMock()
         mock_openai_gateway.return_value = mock_openai_instance
         
-        create_llm_gateway(config)
+        LLMGatewayFactory.create_gateway(config)
         
         mock_openai_gateway.assert_called_once_with(api_key="test-api-key")
         mock_llm_gateway.assert_called_once_with(model="gpt-4", gateway=mock_openai_instance)
@@ -136,7 +136,7 @@ class DescribeLLMGatewayFactory:
         mock_openai_instance = MagicMock()
         mock_openai_gateway.return_value = mock_openai_instance
         
-        create_llm_gateway(config)
+        LLMGatewayFactory.create_gateway(config)
         
         mock_openai_gateway.assert_called_once_with(api_key="env-api-key")
 
@@ -149,7 +149,7 @@ class DescribeLLMGatewayFactory:
         
         with patch.dict('os.environ', {}, clear=True):
             with pytest.raises(ValueError, match="OpenAI provider requires an API key"):
-                create_llm_gateway(config)
+                LLMGatewayFactory.create_gateway(config)
 
     @patch('context_mixer.gateways.llm_factory.OllamaGateway')
     @patch('context_mixer.gateways.llm_factory.LLMGateway')
@@ -163,7 +163,7 @@ class DescribeLLMGatewayFactory:
         mock_ollama_instance = MagicMock()
         mock_ollama_gateway.return_value = mock_ollama_instance
         
-        create_llm_gateway(config)
+        LLMGatewayFactory.create_gateway(config)
         
         mock_ollama_gateway.assert_called_once_with()
         mock_llm_gateway.assert_called_once_with(model="phi3", gateway=mock_ollama_instance)
@@ -176,15 +176,15 @@ class DescribeLLMGatewayFactory:
         )
         
         with pytest.raises(ValueError, match="Unsupported LLM provider: unsupported"):
-            create_llm_gateway(config)
+            LLMGatewayFactory.create_gateway(config)
 
     @patch('context_mixer.gateways.llm_factory.Config')
-    @patch('context_mixer.gateways.llm_factory.create_llm_gateway')
+    @patch('context_mixer.gateways.llm_factory.LLMGatewayFactory.create_gateway')
     def should_create_default_gateway_from_saved_config(self, mock_create_gateway, mock_config_class):
         mock_config_instance = MagicMock()
         mock_config_class.load.return_value = mock_config_instance
         
-        create_default_llm_gateway()
+        LLMGatewayFactory.create_default_gateway()
         
         mock_config_class.load.assert_called_once()
         mock_create_gateway.assert_called_once_with(mock_config_instance)

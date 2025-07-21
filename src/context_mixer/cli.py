@@ -37,7 +37,7 @@ from context_mixer.commands.base import CommandContext
 from context_mixer.config import Config
 from context_mixer.cli_params import CLIParameterHandler
 from context_mixer.gateways.git import GitGateway
-from context_mixer.gateways.llm_factory import create_default_llm_gateway
+from context_mixer.gateways.llm_factory import LLMGatewayFactory
 from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
 
 # Create Typer app
@@ -51,45 +51,38 @@ console = Console()
 
 git_gateway = GitGateway()
 
-# Global LLM gateway - will be created on demand
-llm_gateway = None
-llm_gateway_error = None
-
 
 def get_llm_gateway():
     """
-    Get the LLM gateway, ensuring it's properly configured.
+    Get a new LLM gateway, ensuring it's properly configured.
     
     Returns:
-        LLMGateway: The configured LLM gateway.
+        LLMGateway: A configured LLM gateway.
         
     Raises:
         typer.Exit: If the gateway is not configured properly.
     """
-    global llm_gateway, llm_gateway_error
-    
-    if llm_gateway is None:
-        try:
-            llm_gateway = create_default_llm_gateway()
-        except ValueError as e:
-            llm_gateway_error = str(e)
-        except Exception as e:
-            llm_gateway_error = f"Network error during gateway initialization: {str(e)[:100]}..."
+    try:
+        return LLMGatewayFactory.create_default_gateway()
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
         
-        if llm_gateway is None:
-            if llm_gateway_error:
-                console.print(f"[red]Error: {llm_gateway_error}[/red]")
-            else:
-                console.print("[red]Error: LLM gateway not configured properly.[/red]")
-            
-            console.print("\nTo configure the LLM gateway, run:")
-            console.print("  [cyan]cmx config --provider openai --model o4-mini --api-key YOUR_API_KEY[/cyan]")
-            console.print("  [cyan]cmx config --provider ollama --model phi3[/cyan]")
-            console.print("\nTo see current configuration:")
-            console.print("  [cyan]cmx config --show[/cyan]")
-            raise typer.Exit(1)
-    
-    return llm_gateway
+        console.print("\nTo configure the LLM gateway, run:")
+        console.print("  [cyan]cmx config --provider openai --model o4-mini --api-key YOUR_API_KEY[/cyan]")
+        console.print("  [cyan]cmx config --provider ollama --model phi3[/cyan]")
+        console.print("\nTo see current configuration:")
+        console.print("  [cyan]cmx config --show[/cyan]")
+        raise typer.Exit(1)
+    except Exception as e:
+        error_msg = f"Network error during gateway initialization: {str(e)[:100]}..."
+        console.print(f"[red]Error: {error_msg}[/red]")
+        
+        console.print("\nTo configure the LLM gateway, run:")
+        console.print("  [cyan]cmx config --provider openai --model o4-mini --api-key YOUR_API_KEY[/cyan]")
+        console.print("  [cyan]cmx config --provider ollama --model phi3[/cyan]")
+        console.print("\nTo see current configuration:")
+        console.print("  [cyan]cmx config --show[/cyan]")
+        raise typer.Exit(1)
 
 @app.command()
 def init(
@@ -681,7 +674,7 @@ def configure(
         console.print(f"  Library Path: {config.library_path}")
         console.print(f"  LLM Provider: {config.llm_provider}")
         console.print(f"  LLM Model: {config.llm_model}")
-        console.print(f"  API Key: {'***' if config.llm_api_key else 'Not set'}")
+        console.print(f"  API Key: {'Set' if config.llm_api_key else 'Not set'}")
         console.print(f"  Clustering Enabled: {config.clustering_enabled}")
         console.print(f"  Batch Size: {config.conflict_detection_batch_size}")
         return
@@ -713,9 +706,8 @@ def configure(
             console.print(f"✓ Configuration saved to: {config.config_path}")
             
             # Try to validate the configuration by creating a gateway
-            from context_mixer.gateways.llm_factory import create_llm_gateway
             try:
-                create_llm_gateway(config)
+                LLMGatewayFactory.create_gateway(config)
                 console.print("✓ Configuration validated successfully")
             except ValueError as e:
                 console.print(f"[yellow]Warning: {e}[/yellow]")
