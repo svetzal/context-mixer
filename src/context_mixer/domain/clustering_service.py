@@ -14,9 +14,9 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 try:
-    import hdbscan
+    from hdbscan import HDBSCAN
 except ImportError:
-    hdbscan = None
+    HDBSCAN = None
 
 from .clustering import (
     KnowledgeCluster, ClusteringResult, ClusterType, ClusterMetadata,
@@ -43,7 +43,7 @@ class ClusteringService:
         Args:
             llm_gateway: Optional LLM gateway for generating cluster summaries
         """
-        if hdbscan is None:
+        if HDBSCAN is None:
             raise ImportError("hdbscan package is required. Install with: pip install hdbscan")
 
         self.llm_gateway = llm_gateway
@@ -91,7 +91,7 @@ class ClusteringService:
 
         # Apply HDBSCAN clustering
         params = {**self.default_params, **(clustering_params or {})}
-        clusterer = hdbscan.HDBSCAN(**params)
+        clusterer = HDBSCAN(**params)
 
         # Normalize embeddings for better clustering
         embeddings_scaled = self.scaler.fit_transform(embeddings)
@@ -179,7 +179,7 @@ class ClusteringService:
             self,
             chunks: List[KnowledgeChunk],
             cluster_labels: np.ndarray,
-            clusterer: 'hdbscan.HDBSCAN',
+            clusterer: HDBSCAN,
             chunk_id_map: Dict[int, str]
     ) -> List[KnowledgeCluster]:
         """Create hierarchical clusters from HDBSCAN results."""
@@ -211,7 +211,7 @@ class ClusteringService:
             self,
             hdbscan_label: int,
             chunks: List[KnowledgeChunk],
-            clusterer: 'hdbscan.HDBSCAN'
+            clusterer: HDBSCAN
     ) -> KnowledgeCluster:
         """Create a KnowledgeCluster from a group of chunks."""
         cluster_id = str(uuid.uuid4())
@@ -462,7 +462,7 @@ Summary:"""
     def _calculate_clustering_metrics(
             self,
             cluster_labels: np.ndarray,
-            clusterer: 'hdbscan.HDBSCAN'
+            clusterer: HDBSCAN
     ) -> Dict[str, float]:
         """Calculate clustering performance metrics."""
         metrics = {}
