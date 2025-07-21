@@ -36,6 +36,7 @@ from context_mixer.commands.quarantine import (
 )
 from context_mixer.commands.base import CommandContext
 from context_mixer.config import Config
+from context_mixer.cli_params import CLIParameterHandler
 from context_mixer.gateways.git import GitGateway
 from context_mixer.gateways.llm import LLMGateway
 from context_mixer.domain.knowledge_store import KnowledgeStoreFactory
@@ -308,12 +309,12 @@ def ingest(
     only checking conflicts within/between related clusters.
     """
     # Create a new config with the specified library path and clustering settings
-    config = Config(
+    config = CLIParameterHandler.create_config_from_ingest_params(
         library_path=library_path,
-        conflict_detection_batch_size=batch_size,
-        clustering_enabled=clustering,
+        clustering=clustering,
         min_cluster_size=min_cluster_size,
-        clustering_fallback=clustering_fallback
+        clustering_fallback=clustering_fallback,
+        batch_size=batch_size
     )
 
     # Create knowledge store with dependency injection
