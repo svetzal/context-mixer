@@ -6,6 +6,7 @@ using ChromaDB as the vector database backend.
 """
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -20,6 +21,8 @@ from .knowledge_store import KnowledgeStore, StorageError
 from .clustering_service import ClusteringService
 from .cluster_aware_conflict_detection import ClusterAwareConflictDetector
 from ..gateways.chroma import ChromaGateway
+
+logger = logging.getLogger(__name__)
 
 
 class VectorKnowledgeStore(KnowledgeStore):
@@ -71,8 +74,6 @@ class VectorKnowledgeStore(KnowledgeStore):
                 )
             except ImportError as e:
                 # HDBSCAN not available, fall back to traditional conflict detection
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(f"HDBSCAN clustering not available, falling back to traditional conflict detection: {e}")
                 self.enable_clustering = False
 
@@ -329,8 +330,6 @@ class VectorKnowledgeStore(KnowledgeStore):
             chunk, existing_chunks, use_cache=True, max_candidates=50
         )
 
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"Cluster-aware conflict detection: {len(conflicts)} conflicts found "
                    f"from {len(existing_chunks)} candidates")
 

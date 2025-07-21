@@ -7,15 +7,10 @@ by reducing expensive pairwise comparisons through intelligent grouping of relat
 
 import logging
 import uuid
-import warnings
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Tuple
+
 import numpy as np
-
-# Suppress sklearn deprecation warning about 'force_all_finite' parameter
-# This is an internal sklearn issue that will be resolved in future sklearn versions
-# warnings.filterwarnings("ignore", message=".*force_all_finite.*", category=FutureWarning)
-
 from sklearn.preprocessing import StandardScaler
 
 try:
@@ -25,11 +20,10 @@ except ImportError:
 
 from .clustering import (
     KnowledgeCluster, ClusteringResult, ClusterType, ClusterMetadata,
-    ConflictDetectionCandidate, ClusterRelationship
+    ConflictDetectionCandidate
 )
-from .knowledge import KnowledgeChunk, AuthorityLevel
+from .knowledge import KnowledgeChunk
 from ..gateways.llm import LLMGateway
-
 
 logger = logging.getLogger(__name__)
 
@@ -57,17 +51,17 @@ class ClusteringService:
 
         # Default HDBSCAN parameters optimized for knowledge clustering
         self.default_params = {
-            'min_cluster_size': 3,      # Minimum chunks per cluster
-            'min_samples': 2,           # Minimum samples for core points
+            'min_cluster_size': 3,  # Minimum chunks per cluster
+            'min_samples': 2,  # Minimum samples for core points
             'cluster_selection_epsilon': 0.1,  # Distance threshold
-            'metric': 'euclidean',      # Distance metric
-            'cluster_selection_method': 'eom'   # Excess of Mass method
+            'metric': 'euclidean',  # Distance metric
+            'cluster_selection_method': 'eom'  # Excess of Mass method
         }
 
     async def cluster_knowledge_chunks(
-        self, 
-        chunks: List[KnowledgeChunk],
-        clustering_params: Optional[Dict] = None
+            self,
+            chunks: List[KnowledgeChunk],
+            clustering_params: Optional[Dict] = None
     ) -> ClusteringResult:
         """
         Perform hierarchical HDBSCAN clustering on knowledge chunks.
@@ -123,13 +117,14 @@ class ClusteringService:
             performance_metrics=metrics
         )
 
-        logger.info(f"Clustering completed: {len(clusters)} clusters, {len(noise_chunk_ids)} noise chunks")
+        logger.info(
+            f"Clustering completed: {len(clusters)} clusters, {len(noise_chunk_ids)} noise chunks")
         return result
 
     def generate_conflict_detection_candidates(
-        self,
-        clustering_result: ClusteringResult,
-        target_chunk: KnowledgeChunk
+            self,
+            clustering_result: ClusteringResult,
+            target_chunk: KnowledgeChunk
     ) -> List[ConflictDetectionCandidate]:
         """
         Generate prioritized conflict detection candidates using cluster relationships.
@@ -159,10 +154,13 @@ class ClusteringService:
         # Sort by priority score (higher = more important)
         candidates.sort(key=lambda c: c.priority_score, reverse=True)
 
-        logger.debug(f"Generated {len(candidates)} conflict detection candidates for chunk {target_chunk.id}")
+        logger.debug(
+            f"Generated {len(candidates)} conflict detection candidates for chunk "
+            f"{target_chunk.id}")
         return candidates
 
-    def _prepare_embeddings(self, chunks: List[KnowledgeChunk]) -> Tuple[np.ndarray, Dict[int, str]]:
+    def _prepare_embeddings(self, chunks: List[KnowledgeChunk]) -> Tuple[
+        np.ndarray, Dict[int, str]]:
         """Prepare embeddings matrix and create chunk ID mapping."""
         embeddings = []
         chunk_id_map = {}
@@ -178,11 +176,11 @@ class ClusteringService:
         return np.array(embeddings), chunk_id_map
 
     async def _create_hierarchical_clusters(
-        self,
-        chunks: List[KnowledgeChunk],
-        cluster_labels: np.ndarray,
-        clusterer: 'hdbscan.HDBSCAN',
-        chunk_id_map: Dict[int, str]
+            self,
+            chunks: List[KnowledgeChunk],
+            cluster_labels: np.ndarray,
+            clusterer: 'hdbscan.HDBSCAN',
+            chunk_id_map: Dict[int, str]
     ) -> List[KnowledgeCluster]:
         """Create hierarchical clusters from HDBSCAN results."""
         clusters = []
@@ -210,10 +208,10 @@ class ClusteringService:
         return self._organize_cluster_hierarchy(clusters)
 
     async def _create_cluster_from_chunks(
-        self,
-        hdbscan_label: int,
-        chunks: List[KnowledgeChunk],
-        clusterer: 'hdbscan.HDBSCAN'
+            self,
+            hdbscan_label: int,
+            chunks: List[KnowledgeChunk],
+            clusterer: 'hdbscan.HDBSCAN'
     ) -> KnowledgeCluster:
         """Create a KnowledgeCluster from a group of chunks."""
         cluster_id = str(uuid.uuid4())
@@ -292,11 +290,12 @@ class ClusteringService:
         try:
             # Combine chunk contents for analysis
             combined_content = "\n\n".join([
-                f"Chunk {i+1}: {chunk.content[:200]}..." 
+                f"Chunk {i + 1}: {chunk.content[:200]}..."
                 for i, chunk in enumerate(chunks[:5])  # Limit to first 5 chunks
             ])
 
-            prompt = f"""Analyze the following knowledge chunks and provide a concise summary (2-3 sentences) of the common themes and knowledge domain they represent:
+            prompt = f"""Analyze the following knowledge chunks and provide a concise summary (
+            2-3 sentences) of the common themes and knowledge domain they represent:
 
 {combined_content}
 
@@ -309,13 +308,15 @@ Summary:"""
             logger.warning(f"Failed to generate cluster summary: {e}")
             return None
 
-    def _organize_cluster_hierarchy(self, clusters: List[KnowledgeCluster]) -> List[KnowledgeCluster]:
+    def _organize_cluster_hierarchy(self, clusters: List[KnowledgeCluster]) -> List[
+        KnowledgeCluster]:
         """Organize clusters into a hierarchy based on domain relationships."""
         # For now, return flat structure - hierarchy organization can be enhanced later
         # This would involve analyzing domain relationships and creating parent-child links
         return clusters
 
-    def _find_chunk_cluster(self, clustering_result: ClusteringResult, chunk_id: str) -> Optional[KnowledgeCluster]:
+    def _find_chunk_cluster(self, clustering_result: ClusteringResult, chunk_id: str) -> Optional[
+        KnowledgeCluster]:
         """Find the cluster containing a specific chunk."""
         for cluster in clustering_result.clusters:
             if chunk_id in cluster.chunk_ids:
@@ -323,10 +324,10 @@ Summary:"""
         return None
 
     def _generate_cluster_based_candidates(
-        self,
-        clustering_result: ClusteringResult,
-        target_chunk: KnowledgeChunk,
-        target_cluster: KnowledgeCluster
+            self,
+            clustering_result: ClusteringResult,
+            target_chunk: KnowledgeChunk,
+            target_cluster: KnowledgeCluster
     ) -> List[ConflictDetectionCandidate]:
         """Generate conflict detection candidates based on cluster relationships."""
         candidates = []
@@ -348,7 +349,8 @@ Summary:"""
         for cluster in clustering_result.clusters:
             if cluster.id != target_cluster.id:
                 # Check if clusters are related (same domain, etc.)
-                relationship_score = self._calculate_cluster_relationship_score(target_cluster, cluster)
+                relationship_score = self._calculate_cluster_relationship_score(target_cluster,
+                                                                                cluster)
                 if relationship_score > 0.3:  # Only consider related clusters
 
                     # Select representative chunks from the other cluster
@@ -371,9 +373,9 @@ Summary:"""
         return candidates
 
     def _generate_noise_candidates(
-        self,
-        clustering_result: ClusteringResult,
-        target_chunk: KnowledgeChunk
+            self,
+            clustering_result: ClusteringResult,
+            target_chunk: KnowledgeChunk
     ) -> List[ConflictDetectionCandidate]:
         """Generate candidates for noise chunks (not assigned to any cluster)."""
         candidates = []
@@ -397,15 +399,16 @@ Summary:"""
         return candidates
 
     def _calculate_cluster_relationship_score(
-        self,
-        cluster1: KnowledgeCluster,
-        cluster2: KnowledgeCluster
+            self,
+            cluster1: KnowledgeCluster,
+            cluster2: KnowledgeCluster
     ) -> float:
         """Calculate relationship score between two clusters."""
         # Domain overlap
         domains1 = set(cluster1.metadata.domains)
         domains2 = set(cluster2.metadata.domains)
-        domain_overlap = len(domains1.intersection(domains2)) / max(len(domains1.union(domains2)), 1)
+        domain_overlap = len(domains1.intersection(domains2)) / max(len(domains1.union(domains2)),
+                                                                    1)
 
         # Authority level compatibility
         auth1 = cluster1.metadata.authority_levels
@@ -457,9 +460,9 @@ Summary:"""
         )
 
     def _calculate_clustering_metrics(
-        self,
-        cluster_labels: np.ndarray,
-        clusterer: 'hdbscan.HDBSCAN'
+            self,
+            cluster_labels: np.ndarray,
+            clusterer: 'hdbscan.HDBSCAN'
     ) -> Dict[str, float]:
         """Calculate clustering performance metrics."""
         metrics = {}
