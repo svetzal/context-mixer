@@ -43,17 +43,17 @@ from mojentic.llm.gateways import OpenAIGateway
 def discover_scenarios() -> Dict[str, Any]:
     """Dynamically discover all scenario modules."""
     scenarios = {}
-    
+
     # Find the scenarios package directory
     scenarios_dir = Path(__file__).parent / "scenarios"
     if not scenarios_dir.exists():
         return scenarios
-    
+
     # Import each scenario module and look for get_scenario function
     for file_path in scenarios_dir.glob("*.py"):
         if file_path.name.startswith("__"):
             continue
-            
+
         module_name = file_path.stem
         try:
             # Import the module dynamically
@@ -61,17 +61,17 @@ def discover_scenarios() -> Dict[str, Any]:
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
-                
+
                 # Look for get_scenario function
                 if hasattr(module, 'get_scenario'):
                     get_scenario_func = getattr(module, 'get_scenario')
                     if callable(get_scenario_func):
                         scenarios[module_name] = get_scenario_func
-                        
+
         except Exception:
             # Silently skip modules that can't be loaded
             continue
-    
+
     return scenarios
 
 
@@ -82,7 +82,7 @@ class WorkbenchRunner:
         """Initialize the workbench runner."""
         self.console = Console()
         self.automated_resolver = AutomatedConflictResolver(self.console)
-        
+
         # Configure model selection via environment variable
         model_name = os.environ.get("WORKBENCH_MODEL", "O4_MINI").upper()
         try:
@@ -146,34 +146,66 @@ class WorkbenchRunner:
                 "conflicts_detected": 0,
                 "conflicts_expected": len(scenario.expected_conflicts),
                 "validation_results": [],
+                "chunk_count_results": [],
                 "errors": [],
                 "execution_time_seconds": 0.0
             }
 
             try:
-                # Ingest files one by one
-                for filename in scenario.input_files.keys():
-                    file_path = temp_path / filename
+                # Check if chunk count validation is needed
+                track_chunks = scenario.expected_chunk_counts is not None
 
-                    self.console.print(f"[cyan]Ingesting {filename}...[/cyan]")
-                    await do_ingest(
+                if track_chunks:
+                    # Process all files together with chunk tracking
+                    self.console.print("[cyan]Ingesting files with chunk count tracking...[/cyan]")
+                    chunk_counts = await do_ingest(
                         console=self.console,
                         config=config,
                         llm_gateway=self.llm_gateway,
-                        path=file_path,
+                        path=temp_path,
                         project_id="workbench-test",
                         project_name="Workbench Test",
                         commit=False,
                         detect_boundaries=True,
-                        resolver=self.automated_resolver
+                        resolver=self.automated_resolver,
+                        track_chunks_per_file=True
                     )
+
+                    # Validate chunk counts
+                    if chunk_counts is not None:
+                        results["chunk_count_results"] = self._validate_chunk_counts(
+                            chunk_counts, scenario.expected_chunk_counts
+                        )
+                    else:
+                        results["errors"].append("Failed to get chunk counts from ingestion")
+                else:
+                    # Original behavior: ingest files one by one
+                    for filename in scenario.input_files.keys():
+                        file_path = temp_path / filename
+
+                        self.console.print(f"[cyan]Ingesting {filename}...[/cyan]")
+                        await do_ingest(
+                            console=self.console,
+                            config=config,
+                            llm_gateway=self.llm_gateway,
+                            path=file_path,
+                            project_id="workbench-test",
+                            project_name="Workbench Test",
+                            commit=False,
+                            detect_boundaries=True,
+                            resolver=self.automated_resolver
+                        )
 
                 # Check if context.md was created and validate content
                 context_file = library_path / "context.md"
                 if context_file.exists():
                     content = context_file.read_text()
                     results["validation_results"] = self._validate_content(content, scenario.validation_checks)
-                    results["passed"] = all(result["passed"] for result in results["validation_results"])
+
+                    # Calculate overall pass status including chunk count validation
+                    content_validation_passed = all(result["passed"] for result in results["validation_results"])
+                    chunk_count_validation_passed = all(result["passed"] for result in results["chunk_count_results"]) if results["chunk_count_results"] else True
+                    results["passed"] = content_validation_passed and chunk_count_validation_passed
                 else:
                     results["errors"].append("context.md was not created")
 
@@ -224,6 +256,33 @@ class WorkbenchRunner:
 
         return results
 
+    def _validate_chunk_counts(self, actual_counts: Dict[str, int], expected_counts: Dict[str, int]) -> List[Dict[str, Any]]:
+        """
+        Validate actual chunk counts against expected counts.
+
+        Args:
+            actual_counts: Dictionary mapping filename to actual chunk count
+            expected_counts: Dictionary mapping filename to expected chunk count
+
+        Returns:
+            List of chunk count validation results
+        """
+        results = []
+
+        for filename, expected_count in expected_counts.items():
+            actual_count = actual_counts.get(filename, 0)
+            passed = actual_count == expected_count
+
+            results.append({
+                "filename": filename,
+                "expected_count": expected_count,
+                "actual_count": actual_count,
+                "passed": passed,
+                "message": f"File '{filename}': expected {expected_count} chunks, got {actual_count}"
+            })
+
+        return results
+
     async def run_all_scenarios(self) -> Dict[str, Any]:
         """
         Run all available scenarios.
@@ -262,6 +321,11 @@ class WorkbenchRunner:
                         if not validation["passed"]:
                             self.console.print(f"  [red]• {validation['message']}[/red]")
 
+                    # Show chunk count validation failures
+                    for chunk_validation in result.get("chunk_count_results", []):
+                        if not chunk_validation["passed"]:
+                            self.console.print(f"  [red]• {chunk_validation['message']}[/red]")
+
                     # Show errors
                     for error in result["errors"]:
                         self.console.print(f"  [red]• Error: {error}[/red]")
@@ -287,17 +351,29 @@ class WorkbenchRunner:
         table = Table(title="Workbench Results Summary")
         table.add_column("Scenario", style="cyan")
         table.add_column("Status", style="bold")
-        table.add_column("Validations", style="dim")
+        table.add_column("Content Validations", style="dim")
+        table.add_column("Chunk Counts", style="dim")
         table.add_column("Time (s)", style="yellow", justify="right")
 
         for result in results["scenario_results"]:
             status = "[green]PASSED[/green]" if result["passed"] else "[red]FAILED[/red]"
+
+            # Content validation summary
             validation_count = len(result["validation_results"])
             passed_validations = sum(1 for v in result["validation_results"] if v["passed"])
             validations = f"{passed_validations}/{validation_count}"
+
+            # Chunk count validation summary
+            chunk_count_results = result.get("chunk_count_results", [])
+            if chunk_count_results:
+                chunk_count_passed = sum(1 for c in chunk_count_results if c["passed"])
+                chunk_counts = f"{chunk_count_passed}/{len(chunk_count_results)}"
+            else:
+                chunk_counts = "N/A"
+
             execution_time = f"{result.get('execution_time_seconds', 0.0):.2f}"
 
-            table.add_row(result["scenario_name"], status, validations, execution_time)
+            table.add_row(result["scenario_name"], status, validations, chunk_counts, execution_time)
 
         self.console.print(table)
 
@@ -353,17 +429,17 @@ def list_scenarios_command(args):
     """List all available scenarios."""
     console = Console()
     runner = WorkbenchRunner()
-    
+
     console.print("[bold green]Available Scenarios[/bold green]")
-    
+
     table = Table()
     table.add_column("Name", style="cyan")
     table.add_column("Description", style="dim")
-    
+
     for scenario_name in runner.scenarios.keys():
         scenario = runner.scenarios[scenario_name]()
         table.add_row(scenario_name, scenario.description)
-    
+
     console.print(table)
 
 
@@ -371,11 +447,11 @@ def validate_scenario_command(args):
     """Validate a specific scenario definition."""
     console = Console()
     runner = WorkbenchRunner()
-    
+
     if args.scenario_name not in runner.scenarios:
         console.print(f"[red]Error: Scenario '{args.scenario_name}' not found[/red]")
         sys.exit(1)
-    
+
     try:
         scenario = runner.scenarios[args.scenario_name]()
         console.print(f"[green]✅ Scenario '{args.scenario_name}' is valid[/green]")
@@ -393,15 +469,15 @@ def load_yaml_scenario(yaml_path: Path):
     try:
         with yaml_path.open('r') as f:
             yaml_data = yaml.safe_load(f)
-        
+
         # Import the common classes
         from workbench.scenarios.common import ConflictExpectation, ScenarioDefinition
-        
+
         # Convert YAML data to ConflictExpectation objects
         conflict_expectations = []
         for conflict_data in yaml_data.get('expected_conflicts', []):
             conflict_expectations.append(ConflictExpectation(**conflict_data))
-        
+
         # Create ScenarioDefinition
         scenario = ScenarioDefinition(
             name=yaml_data['name'],
@@ -411,16 +487,16 @@ def load_yaml_scenario(yaml_path: Path):
             expected_resolution=yaml_data.get('expected_resolution', ''),
             validation_checks=yaml_data.get('validation_checks', [])
         )
-        
+
         return scenario
-        
+
     except Exception as e:
         raise ValueError(f"Failed to load YAML scenario: {e}")
 
 
 def generate_python_scenario_file(scenario, output_path: Path):
     """Generate a Python scenario file from a ScenarioDefinition."""
-    
+
     # Generate the Python code
     python_code = f'''"""
 {scenario.description}
@@ -431,7 +507,7 @@ from .common import ConflictExpectation, ScenarioDefinition
 
 def get_scenario() -> ScenarioDefinition:
     """Get the {scenario.name} scenario definition."""
-    
+
     return ScenarioDefinition(
         name="{scenario.name}",
         description="{scenario.description}",
@@ -443,7 +519,7 @@ def get_scenario() -> ScenarioDefinition:
         validation_checks={repr(scenario.validation_checks)}
     )
 '''
-    
+
     with output_path.open('w') as f:
         f.write(python_code)
 
@@ -451,36 +527,36 @@ def get_scenario() -> ScenarioDefinition:
 def add_scenario_command(args):
     """Add a new scenario from YAML/JSON."""
     console = Console()
-    
+
     if not args.from_yaml:
         console.print("[yellow]⚠️  Please provide a YAML file with --from-yaml[/yellow]")
         console.print("Example usage: python workbench_cli.py add-scenario --from-yaml scenario.yaml")
         return
-    
+
     yaml_path = Path(args.from_yaml)
     if not yaml_path.exists():
         console.print(f"[red]Error: YAML file not found: {yaml_path}[/red]")
         return
-    
+
     try:
         # Load the YAML scenario
         scenario = load_yaml_scenario(yaml_path)
-        
+
         # Generate Python scenario file
         scenarios_dir = Path(__file__).parent / "scenarios"
         output_path = scenarios_dir / f"{scenario.name}.py"
-        
+
         if output_path.exists():
             console.print(f"[red]Error: Scenario file already exists: {output_path}[/red]")
             return
-        
+
         generate_python_scenario_file(scenario, output_path)
-        
+
         console.print(f"[green]✅ Successfully created scenario: {scenario.name}[/green]")
         console.print(f"File created: {output_path}")
         console.print("You can now run it with:")
         console.print(f"python workbench_cli.py run --scenario {scenario.name}")
-        
+
     except Exception as e:
         console.print(f"[red]Error creating scenario: {e}[/red]")
 
@@ -488,13 +564,13 @@ def add_scenario_command(args):
 async def main():
     """Main entry point for the workbench CLI."""
     parser = argparse.ArgumentParser(description="Context Mixer Conflict Detection Workbench")
-    
+
     # Create subparsers for different commands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
+
     # Get available scenarios dynamically
     available_scenarios = list(discover_scenarios().keys())
-    
+
     # Run command
     run_parser = subparsers.add_parser('run', help='Run scenarios')
     run_parser.add_argument(
@@ -503,29 +579,29 @@ async def main():
         choices=available_scenarios
     )
     run_parser.set_defaults(func=run_command)
-    
+
     # List scenarios command
     list_parser = subparsers.add_parser('list-scenarios', help='List all available scenarios')
     list_parser.set_defaults(func=list_scenarios_command)
-    
+
     # Validate scenario command
     validate_parser = subparsers.add_parser('validate-scenario', help='Validate a specific scenario')
     validate_parser.add_argument('scenario_name', help='Name of the scenario to validate')
     validate_parser.set_defaults(func=validate_scenario_command)
-    
+
     # Add scenario command (placeholder)
     add_parser = subparsers.add_parser('add-scenario', help='Add a new scenario from YAML/JSON')
     add_parser.add_argument('--from-yaml', help='Path to YAML scenario definition')
     add_parser.set_defaults(func=add_scenario_command)
-    
+
     args = parser.parse_args()
-    
+
     # If no command specified, default to run
     if not args.command:
         args.command = 'run'
         args.scenario = None
         args.func = run_command
-    
+
     # Handle async commands
     if args.command == 'run':
         await args.func(args)

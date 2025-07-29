@@ -1,8 +1,7 @@
 from context_mixer.domain.chunking_engine import (
     generate_chunk_id,
-    extract_natural_units,
+    split_content_on_blank_lines,
     classify_unit_type,
-    parse_grouping_response,
     create_fallback_groupings,
     fallback_grouping
 )
@@ -41,7 +40,7 @@ class DescribeExtractNaturalUnits:
     def should_extract_single_paragraph(self):
         content = "This is a single paragraph."
 
-        units = extract_natural_units(content)
+        units = split_content_on_blank_lines(content)
 
         assert len(units) == 1
         assert units[0]['content'] == "This is a single paragraph."
@@ -52,7 +51,7 @@ class DescribeExtractNaturalUnits:
     def should_extract_multiple_paragraphs(self):
         content = "First paragraph.\n\nSecond paragraph."
 
-        units = extract_natural_units(content)
+        units = split_content_on_blank_lines(content)
 
         assert len(units) == 2
         assert units[0]['content'] == "First paragraph."
@@ -61,14 +60,14 @@ class DescribeExtractNaturalUnits:
     def should_handle_empty_content(self):
         content = ""
 
-        units = extract_natural_units(content)
+        units = split_content_on_blank_lines(content)
 
         assert len(units) == 0
 
     def should_skip_empty_paragraphs(self):
         content = "First paragraph.\n\n\n\nSecond paragraph."
 
-        units = extract_natural_units(content)
+        units = split_content_on_blank_lines(content)
 
         assert len(units) == 2
         assert units[0]['content'] == "First paragraph."
@@ -77,7 +76,7 @@ class DescribeExtractNaturalUnits:
     def should_classify_units_correctly(self):
         content = "# Header\n\nRegular paragraph.\n\n```\ncode block\n```"
 
-        units = extract_natural_units(content)
+        units = split_content_on_blank_lines(content)
 
         assert len(units) == 3
         assert units[0]['type'] == 'header'
@@ -116,50 +115,6 @@ class DescribeClassifyUnitType:
         assert classify_unit_type(multiline_text) == 'paragraph'
 
 
-class DescribeParseGroupingResponse:
-    def should_parse_valid_grouping_response(self):
-        response = "Here are the groups: [[1, 2], [3, 4, 5], [6]]"
-        num_units = 6
-
-        groupings = parse_grouping_response(response, num_units)
-
-        assert groupings == [[0, 1], [2, 3, 4], [5]]
-
-    def should_handle_invalid_response_with_fallback(self):
-        response = "Invalid response without proper grouping"
-        num_units = 4
-
-        groupings = parse_grouping_response(response, num_units)
-
-        assert len(groupings) > 0
-        # Should cover all units
-        covered_units = set()
-        for group in groupings:
-            covered_units.update(group)
-        assert covered_units == set(range(num_units))
-
-    def should_handle_partial_grouping_by_adding_missing_units(self):
-        response = "Groups: [[1, 2], [4]]"  # Missing unit 3
-        num_units = 4
-
-        groupings = parse_grouping_response(response, num_units)
-
-        # Should cover all units
-        covered_units = set()
-        for group in groupings:
-            covered_units.update(group)
-        assert covered_units == set(range(num_units))
-
-    def should_filter_out_invalid_unit_indices(self):
-        response = "Groups: [[1, 2], [7, 8]]"  # Units 7, 8 don't exist
-        num_units = 4
-
-        groupings = parse_grouping_response(response, num_units)
-
-        # Should only include valid indices
-        for group in groupings:
-            for unit_idx in group:
-                assert 0 <= unit_idx < num_units
 
 
 class DescribeCreateFallbackGroupings:

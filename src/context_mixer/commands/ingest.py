@@ -283,7 +283,7 @@ def _apply_conflict_resolutions(resolved_conflicts, valid_chunks, chunks_to_stor
     return chunks_to_add
 
 
-async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None, event_bus: EventBus=None):
+async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path=None, project_id: str=None, project_name: str=None, commit: bool=True, detect_boundaries: bool=True, resolver: ConflictResolver=None, knowledge_store: KnowledgeStore=None, event_bus: EventBus=None, track_chunks_per_file: bool=False):
     """
     Ingest existing prompt artifacts into the library using intelligent chunking.
 
@@ -302,6 +302,13 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                         a vector store using the factory pattern.
         event_bus: Optional event bus for publishing events. If not provided, will use
                   the global event bus.
+        track_chunks_per_file: Whether to track and return chunk counts per file.
+                              When True, files are processed individually and chunk
+                              counts per file are returned.
+
+    Returns:
+        Dict[str, int] or None: If track_chunks_per_file is True, returns a dictionary
+                               mapping filename to chunk count. Otherwise returns None.
     """
     # Disable tokenizer parallelism to avoid warnings when using async operations
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -365,6 +372,9 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
         # Ensure the library directory exists
         config.library_path.mkdir(parents=True, exist_ok=True)
 
+        # Initialize chunk count tracking if requested
+        chunk_counts_per_file = {} if track_chunks_per_file else None
+
         if detect_boundaries:
             # Use ChunkingEngine for intelligent semantic boundary detection with structured output
             console.print("[blue]Analyzing content using structured LLM output for complete chunks...[/blue]")
@@ -380,16 +390,44 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 console.print(f"[cyan]{project_info}[/cyan]")
 
             chunking_engine = ChunkingEngine(llm_gateway)
-            with time_operation("chunk_creation", timing_collector) as chunk_timing:
-                progress_tracker.start_operation("chunking", "Creating chunks", 1)
-                chunks = chunking_engine.chunk_by_structured_output(
-                    ingest_content, 
-                    source=str(path),
-                    project_id=project_id,
-                    project_name=project_name,
-                    project_path=determined_project_path
-                )
-                progress_tracker.complete_operation("chunking")
+
+            if track_chunks_per_file:
+                # Process files individually to track chunks per file
+                chunks = []
+                with time_operation("chunk_creation", timing_collector) as chunk_timing:
+                    progress_tracker.start_operation("chunking", "Creating chunks per file", len(file_contents))
+
+                    for i, (file_path, file_content) in enumerate(file_contents):
+                        if file_content is not None:
+                            console.print(f"[dim]Processing chunks for {file_path}...[/dim]")
+                            file_chunks = chunking_engine.chunk_by_structured_output(
+                                file_content,
+                                source=str(file_path),
+                                project_id=project_id,
+                                project_name=project_name,
+                                project_path=determined_project_path
+                            )
+                            chunks.extend(file_chunks)
+                            chunk_counts_per_file[file_path.name] = len(file_chunks)
+                            console.print(f"[dim]  → {len(file_chunks)} chunks created for {file_path.name}[/dim]")
+                        else:
+                            chunk_counts_per_file[file_path.name] = 0
+
+                        progress_tracker.update_progress("chunking", i + 1, f"Processed {i + 1}/{len(file_contents)} files")
+
+                    progress_tracker.complete_operation("chunking")
+            else:
+                # Original behavior: process all content together
+                with time_operation("chunk_creation", timing_collector) as chunk_timing:
+                    progress_tracker.start_operation("chunking", "Creating chunks", 1)
+                    chunks = chunking_engine.chunk_by_structured_output(
+                        ingest_content, 
+                        source=str(path),
+                        project_id=project_id,
+                        project_name=project_name,
+                        project_path=determined_project_path
+                    )
+                    progress_tracker.complete_operation("chunking")
 
             console.print(f"[dim]🧩 Chunk creation completed in {format_duration(chunk_timing.duration_seconds)}[/dim]")
 
@@ -761,5 +799,10 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
 
         console.print(timing_table)
 
+        # Return chunk counts per file if requested
+        return chunk_counts_per_file
+
     except Exception as e:
         console.print(f"[red]Error during ingestion: {str(e)}[/red]")
+        # Return empty dict if tracking was requested but failed
+        return {} if track_chunks_per_file else None

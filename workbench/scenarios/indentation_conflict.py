@@ -13,7 +13,7 @@ from .common import ConflictExpectation, ScenarioDefinition
 
 def get_scenario() -> ScenarioDefinition:
     """Get the indentation conflict scenario definition."""
-    
+
     code1_content = """# Project Guidelines
 
 ## Code Style
@@ -60,5 +60,9 @@ def get_scenario() -> ScenarioDefinition:
             "should_contain:4 spaces for indentation",
             "should_not_contain:2 spaces for indentation",
             "should_contain:camelCase for variable names",  # Non-conflicting content should remain
-        ]
+        ],
+        expected_chunk_counts={
+            "code1.md": 5,  # Expect 5 chunks of knowledge from code1.md
+            "code2.md": 5   # Expect 5 chunks of knowledge from code2.md
+        }
     )

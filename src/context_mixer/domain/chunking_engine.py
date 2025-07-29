@@ -45,7 +45,7 @@ def generate_chunk_id(content: str, concept: str) -> str:
     return f"chunk_{hash_hex[:12]}"
 
 
-def extract_natural_units(content: str) -> List[Dict[str, Any]]:
+def split_content_on_blank_lines(content: str) -> List[Dict[str, Any]]:
     """
     Pure function to extract natural text units (paragraphs, sections, headers) from content.
 
@@ -102,6 +102,7 @@ def extract_natural_units(content: str) -> List[Dict[str, Any]]:
     return units
 
 
+# TODO: This is awful, I don't understand yet if it's even useful
 def classify_unit_type(text: str) -> str:
     """
     Pure function to classify the type of a text unit.
@@ -134,53 +135,6 @@ def classify_unit_type(text: str) -> str:
     return 'paragraph'
 
 
-def parse_grouping_response(response: str, num_units: int) -> List[List[int]]:
-    """
-    Pure function to parse LLM response to extract unit groupings.
-
-    Args:
-        response: LLM response text
-        num_units: Total number of units
-
-    Returns:
-        List of groups (0-based indices)
-    """
-    groupings = []
-
-    # Look for patterns like [[1, 2], [3, 4, 5], [6]]
-    import ast
-    try:
-        # Try to find and evaluate list-like patterns
-        matches = re.findall(r'\[\[.*?\]\]', response)
-        if matches:
-            # Take the first match and evaluate it
-            groups_str = matches[0]
-            groups = ast.literal_eval(groups_str)
-
-            # Convert to 0-based indices and validate
-            for group in groups:
-                if isinstance(group, list):
-                    zero_based_group = [i-1 for i in group if isinstance(i, int) and 1 <= i <= num_units]
-                    if zero_based_group:
-                        groupings.append(zero_based_group)
-    except:
-        pass
-
-    # If parsing failed, create fallback groupings
-    if not groupings:
-        groupings = create_fallback_groupings(num_units)
-
-    # Ensure all units are covered
-    covered_units = set()
-    for group in groupings:
-        covered_units.update(group)
-
-    # Add missing units as individual groups
-    for i in range(num_units):
-        if i not in covered_units:
-            groupings.append([i])
-
-    return groupings
 
 
 def create_fallback_groupings(num_units: int) -> List[List[int]]:
@@ -304,6 +258,12 @@ class ChunkData(BaseModel):
 class StructuredChunkOutput(BaseModel):
     """Structured output model for LLM to emit complete chunks directly."""
     chunks: List[ChunkData] = Field(..., description="List of complete knowledge chunks")
+
+
+class UnitGroupingResponse(BaseModel):
+    """Structured response model for unit grouping analysis."""
+    groups: List[List[int]] = Field(..., description="Groups of unit indices that should be chunked together")
+    reasoning: Optional[str] = Field(None, description="Explanation of the grouping decisions")
 
 
 class ChunkingEngine:
@@ -896,7 +856,7 @@ Provide your analysis as a structured response."""
         Returns:
             List of units with their content, type, and position info
         """
-        return extract_natural_units(content)
+        return split_content_on_blank_lines(content)
 
     def _classify_unit_type(self, text: str) -> str:
         """
@@ -945,8 +905,7 @@ Guidelines:
 - Prefer groups of 2-5 units when possible
 - Each group should be conceptually coherent and self-contained
 
-Return a list of groups, where each group contains the unit numbers (1-based) that should be grouped together.
-For example: [[1, 2], [3, 4, 5], [6]] means units 1-2 form one chunk, units 3-5 form another chunk, and unit 6 stands alone."""
+Provide groups as lists of unit numbers (1-based indexing). For example, if units 1-2 should be grouped together, units 3-5 should form another group, and unit 6 should stand alone, return groups: [[1, 2], [3, 4, 5], [6]]."""
             ),
             LLMMessage(
                 role=MessageRole.User,
@@ -955,29 +914,36 @@ For example: [[1, 2], [3, 4, 5], [6]] means units 1-2 form one chunk, units 3-5 
         ]
 
         try:
-            # Use simple text generation instead of structured object
-            response = self.llm_gateway.generate(messages)
+            # Use structured output for reliable parsing
+            response = self.llm_gateway.generate_object(messages, UnitGroupingResponse)
 
-            # Parse the response to extract groupings
-            groupings = parse_grouping_response(response, len(units))
-            return groupings
+            # Convert from 1-based to 0-based indices and validate
+            groupings = []
+            for group in response.groups:
+                if isinstance(group, list):
+                    zero_based_group = [i-1 for i in group if isinstance(i, int) and 1 <= i <= len(units)]
+                    if zero_based_group:
+                        groupings.append(zero_based_group)
+
+            # Ensure all units are covered
+            if groupings:
+                covered_units = set()
+                for group in groupings:
+                    covered_units.update(group)
+
+                # Add missing units as individual groups
+                for i in range(len(units)):
+                    if i not in covered_units:
+                        groupings.append([i])
+
+                return groupings
 
         except Exception:
-            # Fallback: group consecutive units of similar types
-            return fallback_grouping(units)
+            pass
 
-    def _parse_grouping_response(self, response: str, num_units: int) -> List[List[int]]:
-        """
-        Parse LLM response to extract unit groupings.
+        # Fallback: group consecutive units of similar types
+        return fallback_grouping(units)
 
-        Args:
-            response: LLM response text
-            num_units: Total number of units
-
-        Returns:
-            List of groups (0-based indices)
-        """
-        return parse_grouping_response(response, num_units)
 
     def _create_fallback_groupings(self, num_units: int) -> List[List[int]]:
         """Create simple fallback groupings."""
