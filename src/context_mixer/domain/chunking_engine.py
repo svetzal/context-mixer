@@ -83,12 +83,8 @@ def split_content_on_blank_lines(content: str) -> List[Dict[str, Any]]:
         start_pos += leading_whitespace
         end_pos = start_pos + len(part)
 
-        # Determine unit type
-        unit_type = classify_unit_type(part)
-
         units.append({
             'content': part,
-            'type': unit_type,
             'start_pos': start_pos,
             'end_pos': end_pos,
             'length': len(part)
@@ -102,37 +98,6 @@ def split_content_on_blank_lines(content: str) -> List[Dict[str, Any]]:
     return units
 
 
-# TODO: This is awful, I don't understand yet if it's even useful
-def classify_unit_type(text: str) -> str:
-    """
-    Pure function to classify the type of a text unit.
-
-    Args:
-        text: The text unit to classify
-
-    Returns:
-        Unit type (header, list, paragraph, code, etc.)
-    """
-    text = text.strip()
-
-    # Check for markdown headers
-    if re.match(r'^#{1,6}\s+', text):
-        return 'header'
-
-    # Check for code blocks
-    if text.startswith('```') or text.startswith('    '):
-        return 'code'
-
-    # Check for lists
-    if re.match(r'^[-*+]\s+', text, re.MULTILINE) or re.match(r'^\d+\.\s+', text, re.MULTILINE):
-        return 'list'
-
-    # Check for short lines (might be titles or labels)
-    if len(text) < 100 and '\n' not in text:
-        return 'title'
-
-    # Default to paragraph
-    return 'paragraph'
 
 
 
@@ -169,7 +134,7 @@ def create_fallback_groupings(num_units: int) -> List[List[int]]:
 
 def fallback_grouping(units: List[Dict[str, Any]]) -> List[List[int]]:
     """
-    Pure function for fallback grouping based on unit types and sizes.
+    Pure function for fallback grouping based on unit sizes.
 
     Args:
         units: List of text units
@@ -183,14 +148,8 @@ def fallback_grouping(units: List[Dict[str, Any]]) -> List[List[int]]:
     max_group_size = 1000  # characters
 
     for i, unit in enumerate(units):
-        # Always start a new group after headers (unless it's the first unit)
-        if unit['type'] == 'header' and current_group:
-            if current_group:
-                groupings.append(current_group)
-            current_group = [i]
-            current_size = unit['length']
         # Add to current group if it won't make it too large
-        elif current_size + unit['length'] <= max_group_size:
+        if current_size + unit['length'] <= max_group_size:
             current_group.append(i)
             current_size += unit['length']
         # Start new group if current one is getting too large
@@ -595,19 +554,18 @@ Output complete chunks directly - do not emit metadata about character positions
         Returns:
             Concept name
         """
-        # Look for headers in the units
+        # Look for headers in the units (check content directly)
         for unit in units:
-            if unit['type'] == 'header':
-                # Extract header text
-                content = unit['content']
-                header_match = re.match(r'^#+\s*(.+)', content)
-                if header_match:
-                    return header_match.group(1).strip()
+            content = unit['content']
+            header_match = re.match(r'^#+\s*(.+)', content)
+            if header_match:
+                return header_match.group(1).strip()
 
-        # Look for title-like units
+        # Look for title-like units (short content without newlines)
         for unit in units:
-            if unit['type'] == 'title':
-                return unit['content'][:50].strip()
+            content = unit['content']
+            if len(content) < 100 and '\n' not in content:
+                return content[:50].strip()
 
         # Look for the first meaningful line in any unit
         for unit in units:
@@ -858,17 +816,6 @@ Provide your analysis as a structured response."""
         """
         return split_content_on_blank_lines(content)
 
-    def _classify_unit_type(self, text: str) -> str:
-        """
-        Classify the type of a text unit.
-
-        Args:
-            text: The text unit to classify
-
-        Returns:
-            Unit type (header, list, paragraph, code, etc.)
-        """
-        return classify_unit_type(text)
 
     def _analyze_unit_relationships(self, units: List[Dict[str, Any]]) -> List[List[int]]:
         """
@@ -886,7 +833,7 @@ Provide your analysis as a structured response."""
         # Create a summary of each unit for analysis
         unit_summaries = []
         for i, unit in enumerate(units):
-            summary = f"Unit {i+1} ({unit['type']}): {unit['content'][:200]}..."
+            summary = f"Unit {i+1}: {unit['content'][:200]}..."
             unit_summaries.append(summary)
 
         # Ask LLM to group related units
@@ -1051,18 +998,25 @@ Provide groups as lists of unit numbers (1-based indexing). For example, if unit
 
         for i, unit in enumerate(units):
             concept = f"Unit {i+1}"
-            if unit['type'] == 'header':
-                # Extract header text
+            unit_type = "content"
+            
+            # Check if it's a header (content-based detection)
+            if unit['content'].startswith('#'):
                 header_text = re.sub(r'^#+\s*', '', unit['content'].split('\n')[0]).strip()
                 if header_text:
                     concept = header_text
+                    unit_type = "header"
+            # Check if it's title-like (short content without newlines)
+            elif len(unit['content']) < 100 and '\n' not in unit['content']:
+                concept = unit['content'][:50].strip()
+                unit_type = "title"
 
             boundaries.append(ChunkBoundary(
                 start_position=unit['start_pos'],
                 end_position=unit['end_pos'],
                 concept=concept,
                 confidence=0.6,
-                reasoning=f"Natural unit boundary ({unit['type']})"
+                reasoning=f"Natural unit boundary ({unit_type})"
             ))
 
         return BoundaryDetectionResult(
