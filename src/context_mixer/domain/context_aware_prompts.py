@@ -115,16 +115,33 @@ class ContextAwarePromptBuilder:
             {new_content}
             ```
 
+            IMPORTANT: If content is prefixed with "[Concept: X]", this indicates the architectural 
+            scope or domain the rule applies to. Rules with DIFFERENT concepts are NOT in conflict
+            even if they seem contradictory at first glance.
+
+            For example:
+            - "[Concept: gateway]" rules apply ONLY to gateway/I/O boundary components
+            - "[Concept: testing]" rules apply to GENERAL testing practices
+            - A gateway-specific "don't test gateways" rule does NOT conflict with a general 
+              "write tests for new functionality" rule because they apply to DIFFERENT scopes
+
             A CONFLICT exists ONLY when:
             1. Both documents address the SAME specific topic or rule
-            2. They provide CONTRADICTORY or MUTUALLY EXCLUSIVE guidance
+            2. They provide CONTRADICTORY or MUTUALLY EXCLUSIVE guidance  
             3. Following both pieces of guidance would be impossible or inconsistent
             4. They apply to the SAME context (same platform, environment, architectural layer, etc.)
+            5. They have the SAME or overlapping concept scope (or no concept specified)
 
             Examples of REAL conflicts:
             - Different formatting rules for the same code element in the same language
             - Contradictory performance recommendations for the same operation in the same environment
             - Mutually exclusive architectural patterns for the same component type
+
+            Examples of NOT conflicts (different scopes):
+            - "[Concept: gateway] Don't test gateways" vs "[Concept: testing] Write tests for new functionality"
+              These are COMPLEMENTARY - general testing applies, but gateways are a specific exception
+            - "[Concept: repository] Use SQL" vs "[Concept: cache] Use Redis"
+              These apply to different architectural components
         """).strip()
     
     def _build_context_guidance(self, existing_analysis: ContextAnalysis, new_analysis: ContextAnalysis) -> str:

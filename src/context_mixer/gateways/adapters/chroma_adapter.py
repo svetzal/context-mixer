@@ -47,7 +47,7 @@ class ChromaAdapter:
         for chunk in chunks:
             ids.append(chunk.id)
             documents.append(chunk.content)
-            metadatas.append(self._metadata_to_chroma_dict(chunk.metadata))
+            metadatas.append(self._metadata_to_chroma_dict(chunk.metadata, chunk.concept))
 
             if chunk.embedding:
                 embeddings.append(chunk.embedding)
@@ -104,11 +104,16 @@ class ChromaAdapter:
             if relevance_score < query.min_relevance_score:
                 continue
 
+            # Extract concept from ChromaDB metadata
+            chunk_metadata = metadatas[i] if i < len(metadatas) else {}
+            concept = chunk_metadata.get("concept", "") if isinstance(chunk_metadata, dict) else ""
+
             # Reconstruct KnowledgeChunk from ChromaDB data
             chunk = KnowledgeChunk(
                 id=chunk_id,
                 content=documents[i] if i < len(documents) else "",
-                metadata=self._chroma_dict_to_metadata(metadatas[i] if i < len(metadatas) else {}),
+                concept=concept,
+                metadata=self._chroma_dict_to_metadata(chunk_metadata),
                 embedding=embeddings[i] if embeddings[i] is not None else None
             )
 
@@ -138,9 +143,11 @@ class ChromaAdapter:
             total_found=len(results)
         )
 
-    def _metadata_to_chroma_dict(self, metadata: ChunkMetadata) -> Dict[str, Any]:
+    def _metadata_to_chroma_dict(self, metadata: ChunkMetadata, concept: str = "") -> Dict[str, Any]:
         """Convert ChunkMetadata to ChromaDB metadata dictionary."""
         return {
+            # Store concept for conflict detection context
+            "concept": concept,
             # Convert lists to comma-separated strings for ChromaDB compatibility
             "domains": ",".join(metadata.domains) if metadata.domains else "",
             "authority": metadata.authority.value,

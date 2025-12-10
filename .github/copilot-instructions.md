@@ -46,6 +46,22 @@ As Context Mixer is a Mojility product, maintain a consistent identity and brand
     - pytest: Testing
     - MkDocs: Documentation
 
+## Architecture
+
+The codebase follows a layered architecture with clear separation of concerns:
+
+- **CLI Layer** (`cli.py`): Typer-based command dispatch with rich terminal output
+- **Commands Layer** (`commands/`): Command delegates implementing the Command pattern
+  - `operations/`: Core domain operations (merge, commit, conflict detection)
+  - `interactions/`: Interactive command components for user workflows
+- **Domain Layer** (`domain/`): Pure business logic and data structures
+  - Knowledge management following CRAFT principles
+  - Event-driven progress tracking system
+  - Conflict detection and quarantine management
+- **Gateways Layer** (`gateways/`): I/O isolation for external dependencies
+  - Git operations, LLM integrations, ChromaDB vector storage
+- **Utils Layer** (`utils/`): Cross-cutting concerns and helpers
+
 ## Project Structure
 
 - src/ # Python source code and tests
@@ -69,6 +85,67 @@ As Context Mixer is a Mojility product, maintain a consistent identity and brand
 - SPEC.md # Original design thoughts from the creator
 - THEORY.md # Theoretical foundations and CRAFT philosophy
 - pyproject.toml # Python project metadata and dependencies
+
+## Key Components
+
+### Knowledge Store System
+The knowledge storage implements a multi-layered approach:
+- `KnowledgeStore`: Abstract interface for storage operations
+- `VectorKnowledgeStore`: Semantic search via ChromaDB embeddings
+- `FileKnowledgeStore`: Git-based file persistence
+- `HybridKnowledgeStore`: Combines vector and file storage
+
+### Event System
+Event-driven architecture for progress tracking and system coordination:
+- `ProgressEvents`: Domain events for tracking operations
+- `EventDrivenProgress`: Observable progress system
+- CLI observers provide real-time feedback
+
+### Conflict Management
+HDBSCAN-based clustering for intelligent conflict detection:
+- Semantic similarity analysis for knowledge chunks
+- Quarantine system for conflict resolution workflows
+- Context-aware resolution strategies
+
+### Chunking Engine
+The `ChunkingEngine` (`domain/chunking_engine.py`) converts content into knowledge chunks:
+- `chunk_by_structured_output()`: Main chunking method using LLM structured output
+- The system prompt in this method controls chunking granularity and behavior
+- Chunk IDs are generated from content hash + concept + **source** (source ensures uniqueness across files)
+- When modifying chunking behavior, update the LLM system prompt - not the parsing logic
+
+### Ingestion Pipeline
+The ingestion flow (`commands/ingest.py`) follows this sequence:
+1. **File Reading**: Parallel file reading for performance
+2. **Chunking**: `ChunkingEngine.chunk_by_structured_output()` creates atomic chunks
+3. **Validation**: Each chunk validated for completeness
+4. **Internal Conflict Detection**: Check conflicts between new chunks (batch processing)
+5. **External Conflict Detection**: Check conflicts with existing stored chunks
+6. **Resolution**: Apply resolution strategies (automatic, LLM-based, or interactive)
+7. **Storage**: Store resolved chunks in vector knowledge store
+8. **Context.md Generation**: Write summary file for compatibility
+
+### Workbench System
+The workbench (`workbench/`) provides integration testing for conflict detection:
+
+```bash
+# Run all scenarios
+python workbench/workbench_cli.py run
+
+# Run specific scenario
+python workbench/workbench_cli.py run --scenario indentation_conflict
+
+# List available scenarios
+python workbench/workbench_cli.py list-scenarios
+```
+
+**Scenario locations**: `workbench/scenarios/*.py`
+
+Each scenario defines:
+- `input_files`: Test content with potential conflicts
+- `expected_conflicts`: What conflicts should/shouldn't be detected
+- `validation_checks`: Assertions on final output content
+- `expected_chunk_counts`: Optional validation of chunking granularity
 
 ## Development Setup
 
@@ -141,7 +218,7 @@ m = LLMMessage(
   ```bash
   flake8 src --max-line-length=127
   ```
-- Follow google docstring style for code and tests.
+- Follow numpy-style docstrings for code and tests.
 
 ### Testing Best Practices
 
@@ -252,7 +329,26 @@ into, incorporate the analysis for it into BACKLOG.md.
 
 When realizing we should consider a specific concern or feature in the future, incorporate it into PLAN.md.
 
-When changes are complete, and all unit tests are passing, check our benchmark/run_benchmarks.py script to ensure that our user-facing scenarios are still working as expected.
+When changes are complete, and all unit tests are passing, run the workbench to verify conflict detection scenarios:
+```bash
+python workbench/workbench_cli.py run
+```
+
+When fixing conflict detection bugs, first create/update a workbench scenario that reproduces the issue.
+
+## Key Files for Conflict Detection
+
+When working on conflict detection issues, these are the primary files:
+
+| File | Purpose |
+|------|---------|
+| `domain/chunking_engine.py` | Creates atomic chunks from content; LLM prompt controls granularity |
+| `commands/ingest.py` | Orchestrates the full ingestion pipeline including conflict detection |
+| `commands/operations/merge.py` | `detect_conflicts()` and `detect_conflicts_batch()` functions |
+| `domain/context_aware_prompts.py` | Builds context-aware prompts to reduce false positives |
+| `domain/context_detection.py` | Detects context types (architectural, platform, environment, etc.) |
+| `commands/interactions/conflict_resolution_strategies.py` | Resolution strategy implementations |
+| `workbench/scenarios/*.py` | Integration test scenarios for conflict detection |
 
 ## Release Process
 

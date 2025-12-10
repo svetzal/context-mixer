@@ -143,10 +143,15 @@ class ChromaGateway:
             if results["embeddings"] is not None and len(results["embeddings"]) > 0 and results["embeddings"][0] is not None:
                 embedding = results["embeddings"][0]
 
+            # Extract concept from metadata
+            chroma_metadata = results["metadatas"][0]
+            concept = chroma_metadata.get("concept", "") if isinstance(chroma_metadata, dict) else ""
+
             chunk_data = {
                 "id": results["ids"][0],
                 "content": results["documents"][0],
-                "metadata": self.adapter._chroma_dict_to_metadata(results["metadatas"][0]),
+                "concept": concept,
+                "metadata": self.adapter._chroma_dict_to_metadata(chroma_metadata),
                 "embedding": embedding
             }
 
@@ -176,10 +181,15 @@ class ChromaGateway:
                     results["embeddings"][i] is not None):
                     embedding = results["embeddings"][i]
 
+                # Extract concept from metadata
+                chroma_metadata = results["metadatas"][i]
+                concept = chroma_metadata.get("concept", "") if isinstance(chroma_metadata, dict) else ""
+
                 chunk_data = {
                     "id": chunk_id,
                     "content": results["documents"][i],
-                    "metadata": self.adapter._chroma_dict_to_metadata(results["metadatas"][i]),
+                    "concept": concept,
+                    "metadata": self.adapter._chroma_dict_to_metadata(chroma_metadata),
                     "embedding": embedding
                 }
 

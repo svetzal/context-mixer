@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python workbench/workbench_cli.py run:*)",
+      "Bash(source .venv/bin/activate:*)",
+      "Bash(pytest:*)",
+      "Bash(python benchmark/run_benchmarks.py:*)"
+    ]
+  }
+}

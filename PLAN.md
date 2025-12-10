@@ -176,6 +176,40 @@ Drawing from lessons learned from `copilot/fix-1` and `junie` branch implementat
 - [ ] CI/CD pipeline integration with quality gates
 - [ ] Test coverage improvement to 90%+
 
+### 1.4 Workbench Scenario Expansion
+**Priority**: High - Conflict Detection Quality
+**Story Points**: 13
+
+**Context**:
+The workbench provides regression testing for conflict detection scenarios. Current scenarios test basic conflicts and some false positives, but additional scenarios are needed to validate context-aware conflict detection across all supported context types.
+
+**Current Scenarios**:
+- ✅ `indentation_conflict` - True conflict detection (conflicting style rules)
+- ✅ `internal_conflict` - Conflict within single file
+- ✅ `false_positive_naming` - Different naming conventions are NOT conflicts
+- ❌ `architectural_scope_false_positive` - Context-specific rules incorrectly flagged (NEEDS FIX)
+
+**New Scenarios to Implement**:
+
+| Scenario | Description | Tests |
+|----------|-------------|-------|
+| `environment_false_positive` | "Enable debug logging" (dev) vs "Disable logging" (prod) | Environment context boundaries |
+| `language_false_positive` | "Use snake_case" (Python) vs "Use camelCase" (JavaScript) | Language context boundaries |
+| `framework_overlap` | React vs Vue patterns in the same project | Framework-specific rules |
+| `hierarchical_rules` | General policy → Team guideline → Individual procedure | Rule hierarchy resolution |
+| `temporal_conflict` | Current vs deprecated guidance | Temporal scope handling |
+| `duplicate_knowledge` | Same rule expressed differently in multiple files | Deduplication vs false positive |
+
+**Acceptance Criteria**:
+- [ ] Fix `architectural_scope_false_positive` scenario (currently failing)
+- [ ] Implement `environment_false_positive` scenario
+- [ ] Implement `language_false_positive` scenario
+- [ ] Implement `framework_overlap` scenario
+- [ ] Implement `hierarchical_rules` scenario
+- [ ] Implement `temporal_conflict` scenario
+- [ ] Implement `duplicate_knowledge` scenario
+- [ ] All workbench scenarios passing in CI/CD pipeline
+
 ## Phase 2: Advanced Knowledge Management (Months 3-4)
 
 ### 2.1 Adaptive Granularity (CRAFT-A)
@@ -475,10 +509,11 @@ cmx benchmark --knowledge-base size --query-performance --accuracy-metrics
 ### Recently Completed (Major Milestone) ✅
 1. ~~**HDBSCAN Clustering for Conflict Detection**~~ - **COMPLETED** - Critical performance bottleneck resolved with 70%+ improvement
 
-### Immediate Focus (Next 3 months)  
-1. **Advanced Caching System** - Critical for performance
-2. **Performance Monitoring** - Essential for system reliability  
-3. **Integration Test Framework** - Required for quality assurance
+### Immediate Focus (Next 3 months)
+1. **Workbench Scenario Expansion** - Fix failing `architectural_scope_false_positive` and add new scenarios for comprehensive conflict detection coverage
+2. **Advanced Caching System** - Critical for performance
+3. **Performance Monitoring** - Essential for system reliability
+4. **Integration Test Framework** - Required for quality assurance
 
 ### Medium Term (Months 4-6)
 1. **Adaptive Granularity** - Enhances user experience

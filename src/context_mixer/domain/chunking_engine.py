@@ -25,19 +25,20 @@ from context_mixer.domain.knowledge import (
 from context_mixer.gateways.llm import LLMGateway
 
 
-def generate_chunk_id(content: str, concept: str) -> str:
+def generate_chunk_id(content: str, concept: str, source: str = "") -> str:
     """
-    Pure function to generate a unique ID for a chunk based on its content and concept.
+    Pure function to generate a unique ID for a chunk based on its content, concept, and source.
 
     Args:
         content: The chunk content
         concept: The main concept
+        source: The source identifier (e.g., file path) to ensure uniqueness across sources
 
     Returns:
         Unique chunk identifier
     """
-    # Create a hash of the content and concept
-    combined = f"{concept}:{content}"
+    # Create a hash of the content, concept, and source
+    combined = f"{source}:{concept}:{content}"
     hash_object = hashlib.sha256(combined.encode())
     hash_hex = hash_object.hexdigest()
 
@@ -296,38 +297,62 @@ class ChunkingEngine:
             messages = [
                 LLMMessage(
                     role=MessageRole.System,
-                    content="""You are an expert knowledge curator following CRAFT principles for chunking content into domain-coherent units.
+                    content="""You are an expert knowledge curator following CRAFT principles for chunking content into atomic, domain-coherent knowledge units.
 
-Your task is to analyze the given content and break it into complete, semantically coherent knowledge chunks. Each chunk should:
+Your task is to analyze the given content and break it into ATOMIC knowledge chunks. Each chunk should contain exactly ONE rule, guideline, instruction, or concept.
 
-1. Contain a complete concept or idea that can stand alone
-2. Be semantically bounded to prevent knowledge interference
-3. Include all necessary context to be understood independently
-4. Follow domain separation principles (technical, business, design, etc.)
-5. RESPECT SIZE LIMITS based on granularity level
+CRITICAL CHUNKING RULES:
 
-For each chunk, you must provide:
-- Complete content (the full text of the chunk)
-- Concept name (what this chunk is about)
+1. **ATOMIC GRANULARITY**: Each chunk must contain exactly ONE distinct piece of knowledge:
+   - ONE rule or guideline
+   - ONE configuration setting
+   - ONE naming convention
+   - ONE architectural decision
+   - ONE best practice
+
+2. **LISTS MUST BE SPLIT**: When you encounter a list of rules, guidelines, or instructions:
+   - Each bullet point or list item becomes its OWN SEPARATE chunk
+   - Do NOT combine multiple list items into one chunk
+   - Each item should be independently retrievable and comparable
+
+3. **CONFLICT DETECTION SUPPORT**: Atomic chunks enable proper conflict detection:
+   - "Use 4 spaces" must be separate from "Use camelCase"
+   - This allows the system to detect when another source says "Use 2 spaces"
+   - Combining rules prevents proper conflict identification
+
+EXAMPLE - Given this input:
+```
+## Code Style
+- Use 4 spaces for indentation
+- Maximum line length is 100 characters
+- Use camelCase for variable names
+```
+
+You MUST create 3 SEPARATE chunks:
+1. Chunk about "indentation": "Use 4 spaces for indentation"
+2. Chunk about "line length": "Maximum line length is 100 characters"
+3. Chunk about "variable naming": "Use camelCase for variable names"
+
+NOT one combined "code style" chunk containing all three rules.
+
+For each chunk, provide:
+- Complete content (the atomic rule/guideline text)
+- Concept name (specific topic: "indentation", "line-length", "variable-naming")
 - Domains (technical, business, design, process, etc.)
 - Authority level (foundational, official, conventional, experimental, deprecated)
 - Scope tags (enterprise, prototype, mobile-only, etc.)
-- Granularity (summary, overview, detailed, comprehensive)
+- Granularity (usually "summary" for atomic rules)
 - Searchable tags
 - Dependencies (concepts this chunk requires)
-- Conflicts (concepts this chunk contradicts)
+- Conflicts (concepts this chunk might contradict)
 
-CRITICAL SIZE CONSTRAINTS - Each chunk must respect these token limits:
-- summary: 50-100 tokens (roughly 40-80 words)
-- overview: 200-300 tokens (roughly 150-240 words)
-- detailed: 500-800 tokens (roughly 400-640 words)
-- comprehensive: 1000+ tokens (roughly 800+ words)
+GRANULARITY LEVELS:
+- summary: Single rule, guideline, or atomic fact (preferred for list items)
+- overview: Brief explanation of a concept
+- detailed: In-depth coverage of a topic
+- comprehensive: Exhaustive treatment
 
-Choose the appropriate granularity level for each chunk and ensure the content length matches that level. If content is too long for a granularity level, either split it into multiple chunks or choose a higher granularity level.
-
-CRITICAL: Do not try to preserve exact character positions or markdown formatting. Focus on semantic completeness and conceptual coherence while respecting size limits. Each chunk should be a complete, self-contained unit of knowledge within its size constraints.
-
-Output complete chunks directly - do not emit metadata about character positions or line numbers."""
+REMEMBER: More chunks is better than fewer. When in doubt, split into smaller chunks. Each retrievable unit should represent exactly ONE piece of actionable knowledge."""
                 ),
                 LLMMessage(
                     role=MessageRole.User,
@@ -380,13 +405,14 @@ Output complete chunks directly - do not emit metadata about character positions
                     provenance=provenance
                 )
 
-                # Generate chunk ID
-                chunk_id = self._generate_chunk_id(chunk_data.content, chunk_data.concept)
+                # Generate chunk ID (include source to ensure uniqueness across files)
+                chunk_id = self._generate_chunk_id(chunk_data.content, chunk_data.concept, source)
 
                 # Create the knowledge chunk
                 chunk = KnowledgeChunk(
                     id=chunk_id,
                     content=chunk_data.content,
+                    concept=chunk_data.concept,
                     metadata=metadata
                 )
 
@@ -510,13 +536,14 @@ Output complete chunks directly - do not emit metadata about character positions
             )
         )
 
-        # Generate chunk ID
-        chunk_id = self._generate_chunk_id(chunk_content, concept)
+        # Generate chunk ID (include source to ensure uniqueness across files)
+        chunk_id = self._generate_chunk_id(chunk_content, concept, source)
 
         # Create the knowledge chunk
         return KnowledgeChunk(
             id=chunk_id,
             content=chunk_content,
+            concept=concept,
             metadata=metadata
         )
 
@@ -1079,15 +1106,16 @@ Consider the CRAFT principles:
 
 
 
-    def _generate_chunk_id(self, content: str, concept: str) -> str:
+    def _generate_chunk_id(self, content: str, concept: str, source: str = "") -> str:
         """
-        Generate a unique ID for a chunk based on its content and concept.
+        Generate a unique ID for a chunk based on its content, concept, and source.
 
         Args:
             content: The chunk content
             concept: The main concept
+            source: The source identifier to ensure uniqueness across sources
 
         Returns:
             Unique chunk identifier
         """
-        return generate_chunk_id(content, concept)
+        return generate_chunk_id(content, concept, source)

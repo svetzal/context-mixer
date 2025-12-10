@@ -94,7 +94,10 @@ async def detect_conflicts_batch(chunk_pairs: List[Tuple[KnowledgeChunk, Knowled
         # Create async tasks for this batch
         tasks = []
         for chunk1, chunk2 in batch:
-            task = detect_conflicts_async(chunk1.content, chunk2.content, llm_gateway)
+            # Include concept metadata to help LLM understand architectural scope
+            content1 = f"[Concept: {chunk1.concept}]\n{chunk1.content}" if chunk1.concept else chunk1.content
+            content2 = f"[Concept: {chunk2.concept}]\n{chunk2.content}" if chunk2.concept else chunk2.content
+            task = detect_conflicts_async(content1, content2, llm_gateway)
             tasks.append((chunk1, chunk2, task))
 
         # Execute all tasks in this batch concurrently using asyncio.gather

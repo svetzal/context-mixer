@@ -68,6 +68,7 @@ class KnowledgeChunk(BaseModel):
     """
     id: str = Field(..., description="Unique identifier for this chunk")
     content: str = Field(..., description="The actual knowledge content")
+    concept: str = Field(default="", description="The main concept or topic this chunk covers")
     metadata: ChunkMetadata = Field(..., description="Metadata following CRAFT principles")
     embedding: Optional[List[float]] = Field(None, description="Vector embedding for semantic search")
 
