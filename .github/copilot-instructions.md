@@ -150,11 +150,22 @@ Each scenario defines:
 ## Development Setup
 
 1. Install Python 3.12 or higher.
-2. Install dependencies:
+2. Create and activate the virtual environment:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+3. Install dependencies:
    ```bash
    pip install -e ".[dev]"
    ```
-3. Install pre-commit hooks (recommended):
+
+**CRITICAL: Python Environment**
+- **ALWAYS** activate the virtual environment with `source .venv/bin/activate` before running any Python commands
+- **NEVER** use `python3` or `pip3` directly - the environment is established and ready
+- Use `python` and `pip` (without the 3) after activating the environment
+
+4. Install pre-commit hooks (recommended):
    ```bash
    cat > .git/hooks/pre-commit << 'EOL'
    #!/bin/sh

@@ -28,6 +28,7 @@ jobs:
           python-version: "3.13"
 
       - name: Cache virtual environment
+        id: cache-venv
         uses: actions/cache@v3
         with:
           path: .venv
@@ -36,6 +37,7 @@ jobs:
             ${{ runner.os }}-venv-
 
       - name: Create and activate virtual environment
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         shell: bash
         run: |
           python -m venv .venv

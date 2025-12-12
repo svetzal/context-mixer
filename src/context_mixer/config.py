@@ -14,15 +14,18 @@ DEFAULT_ROOT_CONTEXT_FILENAME = "context.md"
 class Config:
     """Configuration settings for Context Mixer."""
 
-    def __init__(self, 
-                 library_path: Path = None, 
+    def __init__(self,
+                 library_path: Path = None,
                  conflict_detection_batch_size: int = 5,
                  clustering_enabled: bool = True,
                  min_cluster_size: int = 3,
                  clustering_fallback: bool = True,
                  llm_provider: str = "openai",
                  llm_model: str = "o4-mini",
-                 llm_api_key: Optional[str] = None):
+                 llm_api_key: Optional[str] = None,
+                 conflict_embedding_similarity_threshold: float = 0.70,
+                 conflict_pairs_per_llm_batch: int = 10,
+                 conflict_detection_metrics_enabled: bool = True):
         """
         Initialize a Config object with library path, batch processing, clustering, and LLM settings.
 
@@ -35,6 +38,9 @@ class Config:
             llm_provider: LLM provider to use ("openai" or "ollama") (default: "openai").
             llm_model: Model name to use with the LLM provider (default: "o4-mini").
             llm_api_key: API key for providers that require it (default: None).
+            conflict_embedding_similarity_threshold: Minimum cosine similarity for conflict detection (default: 0.70).
+            conflict_pairs_per_llm_batch: Number of pairs to analyze per LLM call (default: 10).
+            conflict_detection_metrics_enabled: Enable metrics collection for conflict detection (default: True).
         """
         self._library_path = library_path or Path.home() / ".context-mixer"
         self._conflict_detection_batch_size = conflict_detection_batch_size
@@ -44,6 +50,9 @@ class Config:
         self._llm_provider = llm_provider
         self._llm_model = llm_model
         self._llm_api_key = llm_api_key
+        self._conflict_embedding_similarity_threshold = conflict_embedding_similarity_threshold
+        self._conflict_pairs_per_llm_batch = conflict_pairs_per_llm_batch
+        self._conflict_detection_metrics_enabled = conflict_detection_metrics_enabled
 
     @property
     def library_path(self) -> Path:
@@ -126,6 +135,36 @@ class Config:
         return self._llm_api_key
 
     @property
+    def conflict_embedding_similarity_threshold(self) -> float:
+        """
+        Get the embedding similarity threshold for conflict detection.
+
+        Returns:
+            float: Minimum cosine similarity to consider for conflicts.
+        """
+        return self._conflict_embedding_similarity_threshold
+
+    @property
+    def conflict_pairs_per_llm_batch(self) -> int:
+        """
+        Get the number of pairs to analyze per LLM call.
+
+        Returns:
+            int: Number of pairs per batch.
+        """
+        return self._conflict_pairs_per_llm_batch
+
+    @property
+    def conflict_detection_metrics_enabled(self) -> bool:
+        """
+        Get whether conflict detection metrics are enabled.
+
+        Returns:
+            bool: True if metrics collection is enabled.
+        """
+        return self._conflict_detection_metrics_enabled
+
+    @property
     def config_path(self) -> Path:
         """
         Get the path to the config file.
@@ -150,7 +189,10 @@ class Config:
             "clustering_fallback": self._clustering_fallback,
             "llm_provider": self._llm_provider,
             "llm_model": self._llm_model,
-            "llm_api_key": self._llm_api_key
+            "llm_api_key": self._llm_api_key,
+            "conflict_embedding_similarity_threshold": self._conflict_embedding_similarity_threshold,
+            "conflict_pairs_per_llm_batch": self._conflict_pairs_per_llm_batch,
+            "conflict_detection_metrics_enabled": self._conflict_detection_metrics_enabled
         }
 
     @classmethod
@@ -173,7 +215,10 @@ class Config:
             clustering_fallback=data.get("clustering_fallback", True),
             llm_provider=data.get("llm_provider", "openai"),
             llm_model=data.get("llm_model", "o4-mini"),
-            llm_api_key=data.get("llm_api_key")
+            llm_api_key=data.get("llm_api_key"),
+            conflict_embedding_similarity_threshold=data.get("conflict_embedding_similarity_threshold", 0.70),
+            conflict_pairs_per_llm_batch=data.get("conflict_pairs_per_llm_batch", 10),
+            conflict_detection_metrics_enabled=data.get("conflict_detection_metrics_enabled", True)
         )
 
     def save(self) -> None:
@@ -182,7 +227,7 @@ class Config:
         """
         # Ensure the config directory exists
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(self.config_path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2)
 

@@ -23,7 +23,6 @@ class DescribeFormatConflictResolutions:
                 description="Indentation conflict between 4 spaces and 2 spaces",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use 4 spaces for indentation", source="existing"),
-                    ConflictingGuidance(content="Use 2 spaces for indentation", source="new")
                 ],
                 resolution="Use 4 spaces for indentation consistently across the codebase"
             ),
@@ -31,7 +30,6 @@ class DescribeFormatConflictResolutions:
                 description="Variable naming convention conflict",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use camelCase for variables", source="existing"),
-                    ConflictingGuidance(content="Use snake_case for variables", source="new")
                 ],
                 resolution="Use camelCase for variables in JavaScript, snake_case in Python"
             )
@@ -52,7 +50,7 @@ class DescribeFormatConflictResolutions:
                 description="Not actually a conflict",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use 4 spaces", source="existing"),
-                    ConflictingGuidance(content="Use 2 spaces", source="new")
+                    ConflictingGuidance(content="Use 2 spaces", source="new"),
                 ],
                 resolution=None
             )
@@ -94,7 +92,6 @@ class DescribeFormatConflictResolutions:
                 description="Resolved conflict",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use tabs", source="existing"),
-                    ConflictingGuidance(content="Use spaces", source="new")
                 ],
                 resolution="Use spaces for indentation"
             ),
@@ -102,7 +99,7 @@ class DescribeFormatConflictResolutions:
                 description="Not a conflict",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Use semicolons", source="existing"),
-                    ConflictingGuidance(content="No semicolons", source="new")
+                    ConflictingGuidance(content="No semicolons", source="new"),
                 ],
                 resolution=None  # This is not a conflict
             )
@@ -127,7 +124,6 @@ class DescribeFormatConflictResolutions:
                 description="Conflict with empty resolution",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Option A", source="existing"),
-                    ConflictingGuidance(content="Option B", source="new")
                 ],
                 resolution=""  # Empty string
             )
@@ -143,7 +139,6 @@ class DescribeFormatConflictResolutions:
                 description="Multi-line\nconflict description",
                 conflicting_guidance=[
                     ConflictingGuidance(content="Option A", source="existing"),
-                    ConflictingGuidance(content="Option B", source="new")
                 ],
                 resolution="Multi-line\nresolution with\nformatting"
             )
@@ -172,7 +167,6 @@ class DescribeDetectConflictsAsync:
             description="Test conflict",
             conflicting_guidance=[
                 ConflictingGuidance(content="Content A", source="existing"),
-                ConflictingGuidance(content="Content B", source="new")
             ]
         )
         return MockLLMGateway(responses={
@@ -206,13 +200,13 @@ class DescribeDetectConflictsBatch:
     def sample_chunks(self):
         """Create sample knowledge chunks for testing."""
         provenance1 = ProvenanceInfo(
-            source="test_file1.py",
-            created_at="2024-01-01T00:00:00Z"
-        )
+                source="test.md",
+                created_at="2024-01-01T00:00:00Z"
+            )
         provenance2 = ProvenanceInfo(
-            source="test_file2.py",
-            created_at="2024-01-01T00:00:00Z"
-        )
+                source="test.md",
+                created_at="2024-01-01T00:00:00Z"
+            )
 
         metadata1 = ChunkMetadata(
             domains=["test"],
@@ -260,7 +254,6 @@ class DescribeDetectConflictsBatch:
             description="Batch test conflict",
             conflicting_guidance=[
                 ConflictingGuidance(content="Content A", source="existing"),
-                ConflictingGuidance(content="Content B", source="new")
             ]
         )
         return MockLLMGateway(responses={
@@ -298,9 +291,9 @@ class DescribeDetectConflictsBatch:
         """Test that batch function processes multiple chunk pairs correctly."""
         # Create additional chunks for testing
         provenance3 = ProvenanceInfo(
-            source="test_file3.py",
-            created_at="2024-01-01T00:00:00Z"
-        )
+                source="test.md",
+                created_at="2024-01-01T00:00:00Z"
+            )
         metadata3 = ChunkMetadata(
             domains=["test"],
             authority=AuthorityLevel.OFFICIAL,
@@ -431,3 +424,317 @@ class DescribeDetectConflictsArchitecturalScope:
 
         assert isinstance(conflicts, ConflictList)
         assert len(conflicts.list) == 0, "Component-specific rules for different components should not conflict"
+
+
+class DescribeFilterPairsByEmbeddingSimilarity:
+    """Test the embedding similarity filter."""
+
+    @pytest.fixture
+    def sample_metadata(self):
+        """Create sample metadata for chunks."""
+        return ChunkMetadata(
+            domains=["technical"],
+            authority=AuthorityLevel.CONVENTIONAL,
+            scope=["enterprise"],
+            granularity=GranularityLevel.DETAILED,
+            temporal=TemporalScope.CURRENT,
+            provenance=ProvenanceInfo(
+                source="test.md",
+                created_at="2024-01-01T00:00:00Z"
+            )
+        )
+
+    @pytest.fixture
+    def chunk_with_embedding(self, sample_metadata):
+        """Create a chunk with an embedding."""
+        def make_chunk(content, embedding):
+            return KnowledgeChunk(
+                id=f"test-{hash(content)}",
+                content=content,
+                concept="testing",
+                metadata=sample_metadata,
+                embedding=embedding
+            )
+        return make_chunk
+
+    def should_return_empty_list_for_empty_input(self):
+        """Test that empty input returns empty list."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_embedding_similarity
+
+        result = filter_pairs_by_embedding_similarity([])
+        assert result == []
+
+    def should_filter_out_low_similarity_pairs(self, chunk_with_embedding):
+        """Test that pairs with low similarity are filtered out."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_embedding_similarity
+
+        # Create chunks with very different embeddings (orthogonal vectors)
+        chunk1 = chunk_with_embedding("Content 1", [1.0, 0.0, 0.0])
+        chunk2 = chunk_with_embedding("Content 2", [0.0, 1.0, 0.0])
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_embedding_similarity(pairs, similarity_threshold=0.70)
+
+        # Orthogonal vectors have similarity 0, should be filtered
+        assert len(result) == 0
+
+    def should_keep_high_similarity_pairs(self, chunk_with_embedding):
+        """Test that pairs with high similarity are kept."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_embedding_similarity
+
+        # Create chunks with very similar embeddings
+        chunk1 = chunk_with_embedding("Content 1", [1.0, 0.0, 0.0])
+        chunk2 = chunk_with_embedding("Content 2", [0.9, 0.1, 0.0])
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_embedding_similarity(pairs, similarity_threshold=0.70)
+
+        # Similar vectors should be kept
+        assert len(result) == 1
+        assert result[0] == (chunk1, chunk2)
+
+    def should_keep_identical_embeddings(self, chunk_with_embedding):
+        """Test that identical embeddings are kept."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_embedding_similarity
+
+        chunk1 = chunk_with_embedding("Content 1", [1.0, 0.0, 0.0])
+        chunk2 = chunk_with_embedding("Content 2", [1.0, 0.0, 0.0])
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_embedding_similarity(pairs, similarity_threshold=0.70)
+
+        # Identical embeddings should have similarity 1.0
+        assert len(result) == 1
+
+    def should_pass_through_chunks_without_embeddings(self, chunk_with_embedding, sample_metadata):
+        """Test that chunks without embeddings are passed through (safety)."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_embedding_similarity
+
+        chunk1 = KnowledgeChunk(
+            id="test-1",
+            content="Content 1",
+            concept="testing",
+            metadata=sample_metadata,
+            embedding=None  # No embedding
+        )
+        chunk2 = chunk_with_embedding("Content 2", [1.0, 0.0, 0.0])
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_embedding_similarity(pairs)
+
+        # Should pass through for safety
+        assert len(result) == 1
+
+
+class DescribeFilterPairsByMetadata:
+    """Test the metadata filter."""
+
+    @pytest.fixture
+    def sample_provenance(self):
+        """Create sample provenance info."""
+        return ProvenanceInfo(
+                source="test.md",
+                created_at="2024-01-01T00:00:00Z"
+            )
+
+    @pytest.fixture
+    def make_chunk(self, sample_provenance):
+        """Create a chunk factory."""
+        def _make_chunk(content, domains, concept=None):
+            metadata = ChunkMetadata(
+                domains=domains,
+                authority=AuthorityLevel.CONVENTIONAL,
+                scope=["enterprise"],
+                granularity=GranularityLevel.DETAILED,
+                temporal=TemporalScope.CURRENT,
+                provenance=sample_provenance
+            )
+            return KnowledgeChunk(
+                id=f"test-{hash(content)}",
+                content=content,
+                concept=concept or "testing",
+                metadata=metadata,
+                embedding=[1.0, 0.0, 0.0]
+            )
+        return _make_chunk
+
+    def should_return_empty_list_for_empty_input(self):
+        """Test that empty input returns empty list."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_metadata
+
+        result = filter_pairs_by_metadata([])
+        assert result == []
+
+    def should_filter_out_non_overlapping_domains(self, make_chunk):
+        """Test that pairs with no domain overlap are filtered out."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_metadata
+
+        chunk1 = make_chunk("Content 1", ["frontend"], concept="frontend_stuff")
+        chunk2 = make_chunk("Content 2", ["backend"], concept="backend_stuff")
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_metadata(pairs)
+
+        # No overlapping domains and different concepts, should be filtered
+        assert len(result) == 0
+
+    def should_keep_overlapping_domains(self, make_chunk):
+        """Test that pairs with overlapping domains are kept."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_metadata
+
+        chunk1 = make_chunk("Content 1", ["frontend", "testing"])
+        chunk2 = make_chunk("Content 2", ["testing", "backend"])
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_metadata(pairs)
+
+        # "testing" domain overlaps
+        assert len(result) == 1
+
+    def should_keep_matching_concepts(self, make_chunk):
+        """Test that pairs with matching concepts are kept."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_metadata
+
+        chunk1 = make_chunk("Content 1", ["frontend"], concept="authentication")
+        chunk2 = make_chunk("Content 2", ["backend"], concept="authentication")
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_metadata(pairs)
+
+        # Same concept, should be kept even with different domains
+        assert len(result) == 1
+
+    def should_pass_through_chunks_without_domains(self, make_chunk):
+        """Test that chunks without domains are passed through (safety)."""
+        from context_mixer.commands.operations.merge import filter_pairs_by_metadata
+
+        chunk1 = make_chunk("Content 1", [])  # Empty domains
+        chunk2 = make_chunk("Content 2", ["backend"])
+
+        pairs = [(chunk1, chunk2)]
+        result = filter_pairs_by_metadata(pairs)
+
+        # Should pass through for safety
+        assert len(result) == 1
+
+
+class DescribeDetectConflictsMultiPair:
+    """Test the batched multi-pair conflict detection."""
+
+    @pytest.fixture
+    def sample_metadata(self):
+        """Create sample metadata for chunks."""
+        return ChunkMetadata(
+            domains=["technical"],
+            authority=AuthorityLevel.CONVENTIONAL,
+            scope=["enterprise"],
+            granularity=GranularityLevel.DETAILED,
+            temporal=TemporalScope.CURRENT,
+            provenance=ProvenanceInfo(
+                source="test.md",
+                created_at="2024-01-01T00:00:00Z"
+            )
+        )
+
+    @pytest.fixture
+    def make_chunk(self, sample_metadata):
+        """Create a chunk factory."""
+        def _make_chunk(content, concept=None):
+            return KnowledgeChunk(
+                id=f"test-{hash(content)}",
+                content=content,
+                concept=concept or "testing",
+                metadata=sample_metadata,
+                embedding=[1.0, 0.0, 0.0]
+            )
+        return _make_chunk
+
+    @pytest.mark.asyncio
+    async def should_return_empty_list_for_empty_input(self):
+        """Test that empty input returns empty list."""
+        from context_mixer.commands.operations.merge import detect_conflicts_multi_pair
+
+        mock_gateway = MockLLMGateway()
+        result = await detect_conflicts_multi_pair([], mock_gateway)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def should_detect_conflicts_in_batch(self, make_chunk, mocker):
+        """Test that conflicts are detected across multiple pairs in a batch."""
+        from context_mixer.commands.operations.merge import detect_conflicts_multi_pair, MultiPairConflictResult, PairConflictResult
+
+        chunk1 = make_chunk("Use 4 spaces for indentation")
+        chunk2 = make_chunk("Use 2 spaces for indentation")
+        chunk3 = make_chunk("Use tabs for indentation")
+
+        pairs = [(chunk1, chunk2), (chunk2, chunk3)]
+
+        # Create mock LLM gateway that returns conflicts
+        mock_result = MultiPairConflictResult(
+            pair_results=[
+                PairConflictResult(
+                    pair_index=0,
+                    has_conflict=True,
+                    conflicts=[
+                        Conflict(
+                            description="Indentation conflict",
+                            conflicting_guidance=[
+                                ConflictingGuidance(content="Use 4 spaces", source="chunk1"),
+                            ]
+                        )
+                    ]
+                ),
+                PairConflictResult(
+                    pair_index=1,
+                    has_conflict=True,
+                    conflicts=[
+                        Conflict(
+                            description="Indentation conflict",
+                            conflicting_guidance=[
+                                ConflictingGuidance(content="Use 2 spaces", source="chunk2"),
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+
+        mock_gateway = mocker.MagicMock()
+        mock_gateway.generate_object.return_value = mock_result
+
+        result = await detect_conflicts_multi_pair(pairs, mock_gateway, pairs_per_batch=2)
+
+        assert len(result) == 2
+        # First pair should have conflicts
+        assert len(result[0][2].list) > 0
+        # Second pair should have conflicts
+        assert len(result[1][2].list) > 0
+
+    @pytest.mark.asyncio
+    async def should_handle_batches_larger_than_input(self, make_chunk, mocker):
+        """Test that batch size larger than input works correctly."""
+        from context_mixer.commands.operations.merge import detect_conflicts_multi_pair, MultiPairConflictResult, PairConflictResult
+
+        chunk1 = make_chunk("Content 1")
+        chunk2 = make_chunk("Content 2")
+
+        pairs = [(chunk1, chunk2)]
+
+        mock_result = MultiPairConflictResult(
+            pair_results=[
+                PairConflictResult(
+                    pair_index=0,
+                    has_conflict=False,
+                    conflicts=[]
+                )
+            ]
+        )
+
+        mock_gateway = mocker.MagicMock()
+        mock_gateway.generate_object.return_value = mock_result
+
+        # Batch size of 10 for just 1 pair
+        result = await detect_conflicts_multi_pair(pairs, mock_gateway, pairs_per_batch=10)
+
+        assert len(result) == 1

@@ -20,8 +20,8 @@ class ChromaGateway:
     """
 
     def __init__(
-        self, 
-        db_dir: Path, 
+        self,
+        db_dir: Path,
         connection_pool: Optional[ChromaConnectionPool] = None,
         pool_size: int = 5,
         max_pool_size: int = 10,
@@ -69,6 +69,9 @@ class ChromaGateway:
 
         Args:
             chunks: List of KnowledgeChunk domain objects to store
+
+        Raises:
+            RuntimeError: If embedding dimensions don't match the collection
         """
         if not chunks:
             return
@@ -77,13 +80,27 @@ class ChromaGateway:
             collection = self._get_collection(connection.client)
             chroma_data = self.adapter.chunks_to_chroma_format(chunks)
 
-            # Use upsert to handle both new and updated chunks
-            collection.upsert(
-                ids=chroma_data["ids"],
-                documents=chroma_data["documents"],
-                metadatas=chroma_data["metadatas"],
-                embeddings=chroma_data["embeddings"]
-            )
+            try:
+                # Use upsert to handle both new and updated chunks
+                collection.upsert(
+                    ids=chroma_data["ids"],
+                    documents=chroma_data["documents"],
+                    metadatas=chroma_data["metadatas"],
+                    embeddings=chroma_data["embeddings"]
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "dimension" in error_msg.lower():
+                    # Extract dimension information from error message
+                    raise RuntimeError(
+                        f"Embedding dimension mismatch: {error_msg}\n\n"
+                        f"Your vector store was created with a different embedding model.\n"
+                        f"To fix this:\n"
+                        f"  1. Delete the vector store: rm -rf {self.db_dir}/vector_store\n"
+                        f"  2. Re-run your ingest command\n\n"
+                        f"Note: You'll need to re-ingest your knowledge chunks."
+                    ) from e
+                raise RuntimeError(f"Failed to store chunks: {error_msg}") from e
 
     def search_knowledge(self, query: SearchQuery) -> SearchResults:
         """
@@ -94,6 +111,9 @@ class ChromaGateway:
 
         Returns:
             SearchResults containing matching knowledge chunks
+
+        Raises:
+            RuntimeError: If embedding dimensions don't match the collection
         """
         with self.connection_pool.get_connection() as connection:
             collection = self._get_collection(connection.client)
@@ -101,21 +121,34 @@ class ChromaGateway:
             # Convert domain query to ChromaDB parameters
             chroma_params = self.adapter.search_query_to_chroma_params(query)
 
-            # Perform the search
-            if hasattr(query, 'embedding') and query.embedding:
-                # Vector similarity search with embedding
-                chroma_results = collection.query(
-                    query_embeddings=[query.embedding],
-                    **chroma_params
-                )
-            else:
-                # Text-based search (ChromaDB will generate embeddings)
-                # Don't include embeddings in results to avoid dimension mismatches
-                chroma_results = collection.query(
-                    query_texts=[query.text],
-                    include=["metadatas", "documents", "distances"],
-                    **chroma_params
-                )
+            try:
+                # Perform the search
+                if hasattr(query, 'embedding') and query.embedding:
+                    # Vector similarity search with embedding
+                    chroma_results = collection.query(
+                        query_embeddings=[query.embedding],
+                        **chroma_params
+                    )
+                else:
+                    # Text-based search (ChromaDB will generate embeddings)
+                    # Don't include embeddings in results to avoid dimension mismatches
+                    chroma_results = collection.query(
+                        query_texts=[query.text],
+                        include=["metadatas", "documents", "distances"],
+                        **chroma_params
+                    )
+            except Exception as e:
+                error_msg = str(e)
+                if "dimension" in error_msg.lower():
+                    raise RuntimeError(
+                        f"Embedding dimension mismatch: {error_msg}\n\n"
+                        f"Your vector store was created with a different embedding model.\n"
+                        f"To fix this:\n"
+                        f"  1. Delete the vector store: rm -rf {self.db_dir}/vector_store\n"
+                        f"  2. Re-run your ingest command\n\n"
+                        f"Note: You'll need to re-ingest your knowledge chunks."
+                    ) from e
+                raise RuntimeError(f"Failed to search knowledge: {error_msg}") from e
 
             # Convert results back to domain objects
             return self.adapter.chroma_results_to_search_results(chroma_results, query)
@@ -176,8 +209,8 @@ class ChromaGateway:
             chunks = []
             for i, chunk_id in enumerate(results["ids"]):
                 embedding = None
-                if (results["embeddings"] is not None and 
-                    len(results["embeddings"]) > i and 
+                if (results["embeddings"] is not None and
+                    len(results["embeddings"]) > i and
                     results["embeddings"][i] is not None):
                     embedding = results["embeddings"][i]
 

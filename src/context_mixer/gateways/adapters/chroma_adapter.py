@@ -66,8 +66,8 @@ class ChromaAdapter:
             "embeddings": embeddings
         }
 
-    def chroma_results_to_search_results(self, 
-                                       chroma_results: Dict[str, Any], 
+    def chroma_results_to_search_results(self,
+                                       chroma_results: Dict[str, Any],
                                        query: SearchQuery) -> SearchResults:
         """
         Convert ChromaDB query results to domain SearchResults.

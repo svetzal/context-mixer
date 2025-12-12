@@ -174,10 +174,10 @@ def _find_ingestible_files(directory_path: Path) -> list[Path]:
             for match in matches:
                 if match.is_file() and match not in ingestible_files:
                     # Skip files in common ignore directories
-                    if any(part.startswith('.') and part not in ['.github', '.junie'] 
+                    if any(part.startswith('.') and part not in ['.github', '.junie']
                            for part in match.parts):
                         continue
-                    if any(ignore_dir in match.parts 
+                    if any(ignore_dir in match.parts
                            for ignore_dir in ['node_modules', '__pycache__', '.git', 'venv', 'env']):
                         continue
                     ingestible_files.append(match)
@@ -189,8 +189,8 @@ def _find_ingestible_files(directory_path: Path) -> list[Path]:
 
 
 def apply_conflict_resolutions(
-    resolved_conflicts, 
-    valid_chunks, 
+    resolved_conflicts,
+    valid_chunks,
     existing_chunks_to_store
 ):
     """
@@ -219,7 +219,7 @@ def apply_conflict_resolutions(
             conflicting_chunk_contents.add(guidance.content.strip())
 
     # Filter out conflicting chunks from existing chunks to store
-    filtered_existing_chunks = [chunk for chunk in existing_chunks_to_store 
+    filtered_existing_chunks = [chunk for chunk in existing_chunks_to_store
                                if chunk.content.strip() not in conflicting_chunk_contents]
 
     # For each resolved conflict, create a new chunk with the resolved content
@@ -247,7 +247,7 @@ def apply_conflict_resolutions(
 
     # Add all non-conflicting chunks that aren't already in existing_chunks_to_store
     for chunk in valid_chunks:
-        if (chunk.content.strip() not in conflicting_chunk_contents and 
+        if (chunk.content.strip() not in conflicting_chunk_contents and
             chunk not in existing_chunks_to_store):
             chunks_to_add.append(chunk)
 
@@ -421,7 +421,7 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 with time_operation("chunk_creation", timing_collector) as chunk_timing:
                     progress_tracker.start_operation("chunking", "Creating chunks", 1)
                     chunks = chunking_engine.chunk_by_structured_output(
-                        ingest_content, 
+                        ingest_content,
                         source=str(path),
                         project_id=project_id,
                         project_name=project_name,
@@ -493,6 +493,22 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 console.print(table)
                 console.print(f"[green]Successfully processed {len(chunks)} chunks: {len(valid_chunks)} accepted, {len(chunks) - len(valid_chunks)} rejected[/green]")
 
+                # Generate embeddings for all valid chunks before conflict detection
+                console.print("[blue]Generating embeddings for chunks...[/blue]")
+                with time_operation("embedding_generation", timing_collector) as embedding_timing:
+                    progress_tracker.start_operation("embeddings", "Generating embeddings", len(valid_chunks))
+                    for i, chunk in enumerate(valid_chunks):
+                        if chunk.embedding is None:
+                            try:
+                                chunk.embedding = llm_gateway.generate_embeddings(chunk.content)
+                            except Exception as e:
+                                console.print(f"[yellow]Warning: Failed to generate embedding for chunk {chunk.id[:12]}...: {str(e)}[/yellow]")
+                                # Continue without embedding - ChromaDB will generate it later
+                        progress_tracker.update_progress("embeddings", i + 1, f"Generated embedding {i + 1}/{len(valid_chunks)}")
+                    progress_tracker.complete_operation("embeddings")
+
+                console.print(f"[dim]🔢 Embedding generation completed in {format_duration(embedding_timing.duration_seconds)}[/dim]")
+
                 # Store chunks in vector knowledge store
                 # Use injected knowledge store if provided, otherwise create one (for backward compatibility)
                 if knowledge_store is None:
@@ -513,46 +529,66 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                             chunk_pairs.append((chunk1, chunk2))
 
                     if chunk_pairs:
-                        progress_tracker.start_operation("internal_conflicts", "Checking internal conflicts", len(chunk_pairs))
-                        # Use batch conflict detection for improved performance
-                        from context_mixer.commands.operations.merge import detect_conflicts_batch
+                        # Import optimization functions
+                        from context_mixer.commands.operations.merge import (
+                            filter_pairs_by_embedding_similarity,
+                            filter_pairs_by_metadata,
+                            detect_conflicts_multi_pair
+                        )
 
-                        # Get batch size from config or use default of 5
-                        batch_size = getattr(config, 'conflict_detection_batch_size', 5)
-                        console.print(f"[dim]Processing {len(chunk_pairs)} chunk pairs in batches of {batch_size}[/dim]")
+                        initial_pair_count = len(chunk_pairs)
+                        console.print(f"[dim]Initial pairs to check: {initial_pair_count}[/dim]")
 
-                        try:
-                            # Create progress callback to update progress as batches complete
-                            def progress_callback(completed_count):
-                                progress_tracker.update_progress("internal_conflicts", completed_count, f"Checked pair {completed_count}/{len(chunk_pairs)}")
+                        # Step 1: Apply embedding similarity filter
+                        if config.conflict_detection_metrics_enabled:
+                            console.print("[dim]Applying embedding similarity filter...[/dim]")
+                        chunk_pairs = filter_pairs_by_embedding_similarity(
+                            chunk_pairs,
+                            similarity_threshold=config.conflict_embedding_similarity_threshold
+                        )
+                        if config.conflict_detection_metrics_enabled:
+                            reduction_pct = ((initial_pair_count - len(chunk_pairs)) / initial_pair_count * 100) if initial_pair_count > 0 else 0
+                            console.print(f"[dim]After embedding filter: {len(chunk_pairs)} pairs ({reduction_pct:.1f}% reduction)[/dim]")
 
-                            batch_results = await detect_conflicts_batch(chunk_pairs, llm_gateway, batch_size, progress_callback)
+                        # Step 2: Apply domain/concept filter
+                        pairs_after_embedding = len(chunk_pairs)
+                        if config.conflict_detection_metrics_enabled:
+                            console.print("[dim]Applying metadata filter...[/dim]")
+                        chunk_pairs = filter_pairs_by_metadata(chunk_pairs)
+                        if config.conflict_detection_metrics_enabled:
+                            reduction_pct = ((pairs_after_embedding - len(chunk_pairs)) / pairs_after_embedding * 100) if pairs_after_embedding > 0 else 0
+                            console.print(f"[dim]After metadata filter: {len(chunk_pairs)} pairs ({reduction_pct:.1f}% reduction)[/dim]")
 
-                            # Process results and handle conflicts
-                            for chunk1, chunk2, conflicts in batch_results:
-                                if conflicts.list:
-                                    console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
-                                    for conflict in conflicts.list:
-                                        # Update the conflict to indicate it's between new chunks
-                                        updated_conflict = Conflict(
-                                            description=f"Conflicting guidance detected between new chunks: {conflict.description}",
-                                            conflicting_guidance=[
-                                                ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
-                                                ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
-                                            ]
-                                        )
-                                        all_conflicts.append(updated_conflict)
-                        except Exception as e:
-                            console.print(f"[yellow]Warning: Batch conflict detection failed, falling back to sequential processing: {str(e)}[/yellow]")
-                            # Fallback to sequential processing if batch processing fails
-                            for i, (chunk1, chunk2) in enumerate(chunk_pairs):
-                                progress_tracker.update_progress("internal_conflicts", i + 1, f"Checked pair {i + 1}/{len(chunk_pairs)}")
-                                try:
-                                    from context_mixer.commands.operations.merge import detect_conflicts
-                                    conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
+                        # Step 3: Use batched LLM analysis for remaining pairs
+                        if chunk_pairs:
+                            final_pair_count = len(chunk_pairs)
+                            total_reduction_pct = ((initial_pair_count - final_pair_count) / initial_pair_count * 100) if initial_pair_count > 0 else 0
+                            console.print(f"[green]Optimized conflict detection: {initial_pair_count} → {final_pair_count} pairs ({total_reduction_pct:.1f}% reduction)[/green]")
+
+                            progress_tracker.start_operation("internal_conflicts", "Checking internal conflicts", final_pair_count)
+
+                            # Get batch size from config
+                            pairs_per_batch = config.conflict_pairs_per_llm_batch
+                            console.print(f"[dim]Analyzing {final_pair_count} pairs in batches of {pairs_per_batch}[/dim]")
+
+                            try:
+                                # Create progress callback to update progress as batches complete
+                                def progress_callback(completed_count):
+                                    progress_tracker.update_progress("internal_conflicts", completed_count, f"Checked pair {completed_count}/{final_pair_count}")
+
+                                batch_results = await detect_conflicts_multi_pair(
+                                    chunk_pairs,
+                                    llm_gateway,
+                                    pairs_per_batch=pairs_per_batch,
+                                    progress_callback=progress_callback
+                                )
+
+                                # Process results and handle conflicts
+                                for chunk1, chunk2, conflicts in batch_results:
                                     if conflicts.list:
                                         console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
                                         for conflict in conflicts.list:
+                                            # Update the conflict to indicate it's between new chunks
                                             updated_conflict = Conflict(
                                                 description=f"Conflicting guidance detected between new chunks: {conflict.description}",
                                                 conflicting_guidance=[
@@ -561,11 +597,31 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                                                 ]
                                             )
                                             all_conflicts.append(updated_conflict)
-                                except Exception as inner_e:
-                                    console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(inner_e)}[/yellow]")
+                            except Exception as e:
+                                console.print(f"[yellow]Warning: Optimized conflict detection failed, falling back to sequential processing: {str(e)}[/yellow]")
+                                # Fallback to sequential processing if optimized detection fails
+                                for i, (chunk1, chunk2) in enumerate(chunk_pairs):
+                                    progress_tracker.update_progress("internal_conflicts", i + 1, f"Checked pair {i + 1}/{final_pair_count}")
+                                    try:
+                                        from context_mixer.commands.operations.merge import detect_conflicts
+                                        conflicts = detect_conflicts(chunk1.content, chunk2.content, llm_gateway)
+                                        if conflicts.list:
+                                            console.print(f"[yellow]Detected conflict between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...[/yellow]")
+                                            for conflict in conflicts.list:
+                                                updated_conflict = Conflict(
+                                                    description=f"Conflicting guidance detected between new chunks: {conflict.description}",
+                                                    conflicting_guidance=[
+                                                        ConflictingGuidance(content=chunk1.content, source=f"new chunk {chunk1.id[:12]}..."),
+                                                        ConflictingGuidance(content=chunk2.content, source=f"new chunk {chunk2.id[:12]}...")
+                                                    ]
+                                                )
+                                                all_conflicts.append(updated_conflict)
+                                    except Exception as inner_e:
+                                        console.print(f"[yellow]Warning: Failed to check conflicts between chunks {chunk1.id[:12]}... and {chunk2.id[:12]}...: {str(inner_e)}[/yellow]")
 
-                    if chunk_pairs:
-                        progress_tracker.complete_operation("internal_conflicts")
+                            progress_tracker.complete_operation("internal_conflicts")
+                        else:
+                            console.print("[dim]No pairs remaining after filtering - no conflicts to check[/dim]")
 
                 console.print(f"[dim]🔍 Internal conflict detection completed in {format_duration(internal_conflict_timing.duration_seconds)}[/dim]")
 
@@ -674,6 +730,21 @@ async def do_ingest(console, config: Config, llm_gateway: LLMGateway, path: Path
                 else:
                     # No conflicts detected, store all remaining chunks
                     chunks_to_store.extend([chunk for chunk in valid_chunks if chunk not in chunks_to_store])
+
+                # Generate embeddings for any chunks that don't have them yet (e.g., resolved chunks)
+                console.print("[blue]Ensuring all chunks have embeddings...[/blue]")
+                chunks_without_embeddings = [chunk for chunk in chunks_to_store if chunk.embedding is None]
+                if chunks_without_embeddings:
+                    progress_tracker.start_operation("final_embeddings", "Generating remaining embeddings", len(chunks_without_embeddings))
+                    for i, chunk in enumerate(chunks_without_embeddings):
+                        try:
+                            chunk.embedding = llm_gateway.generate_embeddings(chunk.content)
+                        except Exception as e:
+                            console.print(f"[yellow]Warning: Failed to generate embedding for chunk {chunk.id[:12]}...: {str(e)}[/yellow]")
+                            # Continue without embedding - ChromaDB will generate it later
+                        progress_tracker.update_progress("final_embeddings", i + 1, f"Generated embedding {i + 1}/{len(chunks_without_embeddings)}")
+                    progress_tracker.complete_operation("final_embeddings")
+                    console.print(f"[dim]Generated {len(chunks_without_embeddings)} additional embeddings[/dim]")
 
                 with time_operation("knowledge_store_operations", timing_collector) as store_timing:
                     try:

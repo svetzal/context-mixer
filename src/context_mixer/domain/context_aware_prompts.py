@@ -8,21 +8,21 @@ from .context_detection import ContextDetectionEngine
 class ContextAwarePromptBuilder:
     """
     Builds context-aware prompts for conflict detection.
-    
+
     This class generates dynamic prompts that include context-specific
     examples and guidance, helping the LLM better understand when
     rules apply to different contexts and should not be considered conflicting.
     """
-    
+
     def __init__(self, context_engine: ContextDetectionEngine = None):
         """
         Initialize the context-aware prompt builder.
-        
+
         Args:
             context_engine: Context detection engine to use
         """
         self.context_engine = context_engine or ContextDetectionEngine()
-        
+
         # Context-specific examples for different types
         self.context_examples = {
             ContextType.ARCHITECTURAL: {
@@ -74,31 +74,31 @@ class ContextAwarePromptBuilder:
                 'guidance': 'Rules that apply to different teams or projects are NOT conflicting'
             }
         }
-    
+
     def build_conflict_detection_prompt(self, existing_content: str, new_content: str) -> str:
         """
         Build a context-aware conflict detection prompt.
-        
+
         Args:
             existing_content: The existing content to compare
             new_content: The new content to compare
-            
+
         Returns:
             Context-aware prompt for conflict detection
         """
         # Detect contexts in both contents
         existing_analysis = self.context_engine.detect_contexts(existing_content)
         new_analysis = self.context_engine.detect_contexts(new_content)
-        
+
         # Build the base prompt
         base_prompt = self._build_base_prompt(existing_content, new_content)
-        
+
         # Add context-specific guidance
         context_guidance = self._build_context_guidance(existing_analysis, new_analysis)
-        
+
         # Combine into final prompt
         return f"{base_prompt}\n\n{context_guidance}"
-    
+
     def _build_base_prompt(self, existing_content: str, new_content: str) -> str:
         """Build the base conflict detection prompt."""
         return dedent(f"""
@@ -115,19 +115,19 @@ class ContextAwarePromptBuilder:
             {new_content}
             ```
 
-            IMPORTANT: If content is prefixed with "[Concept: X]", this indicates the architectural 
+            IMPORTANT: If content is prefixed with "[Concept: X]", this indicates the architectural
             scope or domain the rule applies to. Rules with DIFFERENT concepts are NOT in conflict
             even if they seem contradictory at first glance.
 
             For example:
             - "[Concept: gateway]" rules apply ONLY to gateway/I/O boundary components
             - "[Concept: testing]" rules apply to GENERAL testing practices
-            - A gateway-specific "don't test gateways" rule does NOT conflict with a general 
+            - A gateway-specific "don't test gateways" rule does NOT conflict with a general
               "write tests for new functionality" rule because they apply to DIFFERENT scopes
 
             A CONFLICT exists ONLY when:
             1. Both documents address the SAME specific topic or rule
-            2. They provide CONTRADICTORY or MUTUALLY EXCLUSIVE guidance  
+            2. They provide CONTRADICTORY or MUTUALLY EXCLUSIVE guidance
             3. Following both pieces of guidance would be impossible or inconsistent
             4. They apply to the SAME context (same platform, environment, architectural layer, etc.)
             5. They have the SAME or overlapping concept scope (or no concept specified)
@@ -143,15 +143,15 @@ class ContextAwarePromptBuilder:
             - "[Concept: repository] Use SQL" vs "[Concept: cache] Use Redis"
               These apply to different architectural components
         """).strip()
-    
+
     def _build_context_guidance(self, existing_analysis: ContextAnalysis, new_analysis: ContextAnalysis) -> str:
         """
         Build context-specific guidance based on detected contexts.
-        
+
         Args:
             existing_analysis: Context analysis for existing content
             new_analysis: Context analysis for new content
-            
+
         Returns:
             Context-specific guidance text
         """
@@ -159,23 +159,23 @@ class ContextAwarePromptBuilder:
         all_context_types = set()
         for context in existing_analysis.detected_contexts + new_analysis.detected_contexts:
             all_context_types.add(context.type)
-        
+
         # Build context-specific examples and guidance
         context_sections = []
-        
+
         # Add examples for detected context types
         for context_type in all_context_types:
             if context_type in self.context_examples:
                 examples = self.context_examples[context_type]['examples']
                 guidance = self.context_examples[context_type]['guidance']
-                
+
                 section = f"""
                 **{context_type.value.title()} Context Rules**:
                 {guidance}
                 Examples: {'; '.join(examples)}
                 """
                 context_sections.append(section.strip())
-        
+
         # Add general context guidance
         general_guidance = """
         Examples of NOT conflicts (complementary information):
@@ -186,7 +186,7 @@ class ContextAwarePromptBuilder:
         - One document being more detailed than another on the same topic
         - Multiple related but distinct rules that can all be followed simultaneously
         """
-        
+
         # Build the final context guidance
         if context_sections:
             detected_contexts_text = self._format_detected_contexts(existing_analysis, new_analysis)
@@ -200,11 +200,11 @@ class ContextAwarePromptBuilder:
             GENERAL GUIDANCE:
             {general_guidance.strip()}
 
-            IMPORTANT: If the documents apply to different contexts (different platforms, environments, 
-            architectural layers, languages, etc.), they are likely NOT conflicting even if they 
+            IMPORTANT: If the documents apply to different contexts (different platforms, environments,
+            architectural layers, languages, etc.), they are likely NOT conflicting even if they
             appear to give different guidance.
 
-            Only create conflict entries for genuine contradictions where both documents 
+            Only create conflict entries for genuine contradictions where both documents
             give opposing instructions for the exact same thing within the same context.
             """
         else:
@@ -212,54 +212,54 @@ class ContextAwarePromptBuilder:
             GENERAL GUIDANCE:
             {general_guidance.strip()}
 
-            IMPORTANT: If the documents are complementary (one provides headers/structure, 
-            the other provides details), or if they address different aspects of the same 
+            IMPORTANT: If the documents are complementary (one provides headers/structure,
+            the other provides details), or if they address different aspects of the same
             domain, this is NOT a conflict.
 
-            Only create conflict entries for genuine contradictions where both documents 
+            Only create conflict entries for genuine contradictions where both documents
             give opposing instructions for the exact same thing.
             """
-        
+
         return context_guidance.strip()
-    
+
     def _format_detected_contexts(self, existing_analysis: ContextAnalysis, new_analysis: ContextAnalysis) -> str:
         """Format detected contexts for display in the prompt."""
         lines = []
-        
+
         if existing_analysis.detected_contexts:
             existing_contexts = [str(ctx) for ctx in existing_analysis.detected_contexts]
             lines.append(f"Existing content contexts: {', '.join(existing_contexts)}")
-        
+
         if new_analysis.detected_contexts:
             new_contexts = [str(ctx) for ctx in new_analysis.detected_contexts]
             lines.append(f"New content contexts: {', '.join(new_contexts)}")
-        
+
         if not lines:
             lines.append("No specific contexts detected - apply general conflict detection rules")
-        
+
         return '\n'.join(lines)
-    
+
     def build_context_analysis_prompt(self, content: str) -> str:
         """
         Build a prompt for analyzing contexts in content.
-        
+
         This can be used with an LLM to detect contexts that the
         rule-based detectors might miss.
-        
+
         Args:
             content: The content to analyze
-            
+
         Returns:
             Prompt for context analysis
         """
         return dedent(f"""
             Analyze the following content and identify the contexts where the rules or guidance apply.
-            
+
             Content:
             ```
             {content}
             ```
-            
+
             Please identify contexts such as:
             - Architectural contexts (gateway, service, repository, controller, etc.)
             - Platform contexts (web, mobile, desktop, server, cloud, etc.)
@@ -268,21 +268,21 @@ class ContextAwarePromptBuilder:
             - Framework contexts (React, Vue, Django, Spring, etc.)
             - Team contexts (frontend team, backend team, etc.)
             - Any other relevant contexts
-            
+
             For each context you identify, provide:
             1. Context type (architectural, platform, environment, etc.)
             2. Context value (specific technology, pattern, or scope)
             3. Confidence level (high, medium, low)
             4. Brief explanation of why this context applies
-            
+
             Focus on contexts that would help distinguish when rules might appear conflicting
             but actually apply to different situations.
         """).strip()
-    
+
     def add_context_examples(self, context_type: ContextType, examples: List[str], guidance: str):
         """
         Add custom context examples for a specific context type.
-        
+
         Args:
             context_type: The type of context
             examples: List of example scenarios
@@ -292,7 +292,7 @@ class ContextAwarePromptBuilder:
             'examples': examples,
             'guidance': guidance
         }
-    
+
     def get_supported_context_types(self) -> Set[ContextType]:
         """Get all supported context types."""
         return self.context_engine.get_supported_types()

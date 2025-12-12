@@ -503,7 +503,7 @@ REMEMBER: More chunks is better than fewer. When in doubt, split into smaller ch
         try:
             concept_analysis = self._analyze_chunk_concept(chunk_content)
             # Ensure we got the right type of object with valid enum values
-            if (not hasattr(concept_analysis, 'domains') or 
+            if (not hasattr(concept_analysis, 'domains') or
                 not isinstance(concept_analysis.authority_level, AuthorityLevel) or
                 not isinstance(concept_analysis.granularity, GranularityLevel)):
                 raise ValueError("Invalid concept analysis result")
@@ -645,7 +645,7 @@ REMEMBER: More chunks is better than fewer. When in doubt, split into smaller ch
 
         # Additional check for mid-sentence truncation (more sophisticated)
         content_stripped = chunk.content.rstrip()
-        if (content_stripped.endswith(",") and 
+        if (content_stripped.endswith(",") and
             not any(word in content_stripped.lower().split()[-10:] for word in ["list", "items", "options", "choices", "examples"])):
             truncation_indicators["suspicious_comma"] = True
 
@@ -869,7 +869,7 @@ Provide your analysis as a structured response."""
                 role=MessageRole.System,
                 content="""You are an expert at analyzing text structure and semantic relationships.
 
-Your task is to group related text units that should belong together in the same conceptual chunk. 
+Your task is to group related text units that should belong together in the same conceptual chunk.
 
 Guidelines:
 - Group units that discuss the same concept, topic, or theme
@@ -935,8 +935,8 @@ Provide groups as lists of unit numbers (1-based indexing). For example, if unit
         """
         return fallback_grouping(units)
 
-    def _create_boundaries_from_groupings(self, units: List[Dict[str, Any]], 
-                                        groupings: List[List[int]], 
+    def _create_boundaries_from_groupings(self, units: List[Dict[str, Any]],
+                                        groupings: List[List[int]],
                                         content: str) -> List[ChunkBoundary]:
         """
         Create chunk boundaries based on unit groupings.
@@ -1009,7 +1009,7 @@ Provide groups as lists of unit numbers (1-based indexing). For example, if unit
         # Fallback to generic name
         return f"Section {group_idx + 1}"
 
-    def _create_unit_based_boundaries(self, units: List[Dict[str, Any]], 
+    def _create_unit_based_boundaries(self, units: List[Dict[str, Any]],
                                     content: str) -> BoundaryDetectionResult:
         """
         Create simple boundaries based on natural units when LLM analysis fails.
@@ -1026,7 +1026,7 @@ Provide groups as lists of unit numbers (1-based indexing). For example, if unit
         for i, unit in enumerate(units):
             concept = f"Unit {i+1}"
             unit_type = "content"
-            
+
             # Check if it's a header (content-based detection)
             if unit['content'].startswith('#'):
                 header_text = re.sub(r'^#+\s*', '', unit['content'].split('\n')[0]).strip()
