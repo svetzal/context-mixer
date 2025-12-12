@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-12
+
+### Changed
+- Major dependency updates for improved stability and security:
+  - Updated chromadb from 0.3.x to >=1.0.0 (major version upgrade with breaking API changes now supported)
+  - Updated mojentic from >=0.7.4 to >=1.0.0 (stable release)
+  - Updated dspy from unpinned to >=3.0.0 (major version upgrade)
+- Requires Python 3.12+ (Python 3.13 recommended for best dependency compatibility)
+
+### Security
+- Note: urllib3 2.3.0 has known CVEs (CVE-2025-50181, CVE-2025-50182, CVE-2025-66418, CVE-2025-66471) but cannot be upgraded due to kubernetes package dependency constraints from chromadb. Monitor upstream for updates.
+
 ## [0.4.2] - 2025-01-27
 
 ### Changed
