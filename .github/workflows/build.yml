@@ -32,9 +32,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/dev-requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
+          key: ${{ runner.os }}-py3.13-venv-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/dev-requirements.txt') }}
 
       - name: Create virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -62,9 +60,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/dev-requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
+          key: ${{ runner.os }}-py3.13-venv-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/dev-requirements.txt') }}
 
       - name: Lint with flake8
         shell: bash
@@ -106,9 +102,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/dev-requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
+          key: ${{ runner.os }}-py3.13-venv-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/dev-requirements.txt') }}
 
       - name: Build MkDocs site
         shell: bash
